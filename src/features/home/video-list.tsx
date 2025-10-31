@@ -22,7 +22,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { ChannelVideosState } from "@/features/home/search-input";
-import type { MouseEvent } from "react";
+import type { JSX, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 const PAGE_SIZE = 10;
