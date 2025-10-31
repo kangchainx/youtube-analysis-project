@@ -1,18 +1,20 @@
-import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
+  FieldError,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
-} from "@/components/ui/field"
-import { Input } from "@/components/ui/input"
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
-export function LoginForm({
-  className,
-  ...props
-}: React.ComponentProps<"form">) {
+type LoginFormProps = React.ComponentProps<"form"> & {
+  error?: string | null;
+};
+
+export function LoginForm({ className, error, ...props }: LoginFormProps) {
   return (
     <form className={cn("flex flex-col gap-6", className)} {...props}>
       <FieldGroup>
@@ -22,9 +24,20 @@ export function LoginForm({
             Enter your email below to login to your account
           </p>
         </div>
+        {error && (
+          <Field>
+            <FieldError>{error}</FieldError>
+          </Field>
+        )}
         <Field>
           <FieldLabel htmlFor="email">Email</FieldLabel>
-          <Input id="email" type="email" placeholder="m@example.com" required />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="m@example.com"
+            required
+          />
         </Field>
         <Field>
           <div className="flex items-center">
@@ -36,7 +49,7 @@ export function LoginForm({
               Forgot your password?
             </a>
           </div>
-          <Input id="password" type="password" required />
+          <Input id="password" name="password" type="password" required />
         </Field>
         <Field>
           <Button type="submit">Login</Button>
@@ -61,5 +74,5 @@ export function LoginForm({
         </Field>
       </FieldGroup>
     </form>
-  )
+  );
 }
