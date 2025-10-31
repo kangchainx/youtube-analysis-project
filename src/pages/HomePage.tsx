@@ -2,6 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -18,8 +23,9 @@ import SearchInput, {
 import VideoList from "@/features/home/video-list";
 import { searchList } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import { CircleHelp, ChevronDown, ChevronUp } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import helpGif from "@/assets/gif/help.gif";
 
 type YouTubeSearchItem = {
   id?: {
@@ -168,12 +174,36 @@ function HomePage() {
       <div className="w-full max-w-7xl">
         <div id="search-panel" className={searchPanelClasses}>
           <div className="flex flex-col items-center gap-4">
-            <SearchInput
-              onSearch={handleSearch}
-              suggestions={suggestions}
-              onChannelVideosUpdate={(next) => setChannelVideosState(next)}
-              isGlobalSearchEnabled={isGlobalSearchEnabled}
-            />
+            <div className="flex w-full items-center justify-center gap-1">
+              <div className="w-full max-w-md">
+                <SearchInput
+                  onSearch={handleSearch}
+                  suggestions={suggestions}
+                  onChannelVideosUpdate={(next) => setChannelVideosState(next)}
+                  isGlobalSearchEnabled={isGlobalSearchEnabled}
+                />
+              </div>
+              <HoverCard openDelay={100}>
+                <HoverCardTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="查看帮助"
+                    className="rounded-full border border-border/70"
+                  >
+                    <CircleHelp className="h-4 w-4" />
+                  </Button>
+                </HoverCardTrigger>
+                <HoverCardContent side="top" align="end" className="w-72 p-3">
+                  <img
+                    src={helpGif}
+                    alt="搜索帮助动图"
+                    className="h-auto w-full rounded-md"
+                  />
+                </HoverCardContent>
+              </HoverCard>
+            </div>
             <div className="flex items-center gap-2">
               <Switch
                 id="global-search-toggle"
