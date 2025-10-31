@@ -84,6 +84,6 @@ npm run preview
   ```
 - 若需在构建阶段读取本地 `.env` 文件中的 Key，可配合 `--build-arg VITE_YOUTUBE_API_KEY=$(grep ...)` 或使用 CI/CD 密钥管理；镜像构建完成后即为纯静态资源，运行阶段无需额外环境变量。
 
-## 🪪 License
+## 🪪 许可证
 
 This project is licensed under the [MIT License](./LICENSE) — feel free to use and modify with attribution.

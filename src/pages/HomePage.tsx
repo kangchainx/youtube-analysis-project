@@ -19,6 +19,7 @@ import {
 import SearchInput, {
   type ChannelSuggestion,
   type ChannelVideosState,
+  type SearchInputHandle,
 } from "@/features/home/search-input";
 import VideoList from "@/features/home/video-list";
 import { searchList } from "@/lib/youtube";
@@ -46,6 +47,7 @@ function HomePage() {
       error: null,
       isLoading: false,
     });
+  const searchInputRef = useRef<SearchInputHandle | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isGlobalSearchEnabled, setIsGlobalSearchEnabled] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
@@ -103,6 +105,10 @@ function HomePage() {
     }
   }, []);
 
+  const handleManualRefresh = useCallback(() => {
+    searchInputRef.current?.refresh();
+  }, []);
+
   const handleGlobalSearchToggle = (nextValue: boolean) => {
     if (nextValue) {
       setIsConfirmDialogOpen(true);
@@ -144,9 +150,8 @@ function HomePage() {
       ? "-translate-y-4 max-h-0 overflow-hidden opacity-0 pointer-events-none"
       : "max-h-[420px] overflow-visible opacity-100 translate-y-0",
   );
-
   const videoListWrapperClasses = cn(
-    "w-full max-w-9xl transition-all duration-300 ease-in-out",
+    "w-full max-w-7xl transition-all duration-300 ease-in-out",
     isSearchCollapsed ? "mt-4" : "mt-12",
   );
 
@@ -177,6 +182,7 @@ function HomePage() {
             <div className="flex w-full items-center justify-center gap-1">
               <div className="w-full max-w-md">
                 <SearchInput
+                  ref={searchInputRef}
                   onSearch={handleSearch}
                   suggestions={suggestions}
                   onChannelVideosUpdate={(next) => setChannelVideosState(next)}
@@ -221,7 +227,10 @@ function HomePage() {
         </div>
       </div>
       <div className={videoListWrapperClasses}>
-        <VideoList channelVideosState={channelVideosState} />
+        <VideoList
+          channelVideosState={channelVideosState}
+          onRefresh={handleManualRefresh}
+        />
       </div>
       <AlertDialog
         open={isConfirmDialogOpen}

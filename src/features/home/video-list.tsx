@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui/button";
 import {
   Empty,
   EmptyDescription,
@@ -21,7 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { ChannelVideosState } from "@/features/home/search-input";
+import { RefreshCw } from "lucide-react";
 import type { JSX, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -29,9 +37,10 @@ const PAGE_SIZE = 10;
 
 interface VideoListProps {
   channelVideosState: ChannelVideosState;
+  onRefresh?: () => void;
 }
 
-function VideoList({ channelVideosState }: VideoListProps) {
+function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
   const { channelName, channelMetadata, videos, isLoading, error } =
     channelVideosState;
 
@@ -124,11 +133,35 @@ function VideoList({ channelVideosState }: VideoListProps) {
   } else if (channelMetadata) {
     channelSummary = (
       <div className="mb-4 space-y-2">
-        <div className="flex flex-wrap items-baseline gap-2">
-          <h2 className="text-lg font-semibold">{channelMetadata.title}</h2>
-          <span className="text-sm text-muted-foreground">
-            {channelMetadata.handle}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 className="text-lg font-semibold">{channelMetadata.title}</h2>
+            <span className="text-sm text-muted-foreground">
+              {channelMetadata.handle}
+            </span>
+          </div>
+          {onRefresh ? (
+            <Tooltip delayDuration={100}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="rounded-full border border-border/70"
+                  aria-label="刷新频道数据"
+                  onClick={onRefresh}
+                  disabled={isLoading}
+                >
+                  <RefreshCw
+                    className={isLoading ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                刷新频道内容
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
         </div>
         {channelMetadata.description ? (
           <p className="text-sm text-muted-foreground">
@@ -173,29 +206,29 @@ function VideoList({ channelVideosState }: VideoListProps) {
     const skeletonRows = Array.from({ length: Math.min(PAGE_SIZE, 5) }).map(
       (_, index) => (
         <TableRow key={index}>
-          <TableCell>
-            <div className="flex items-center gap-3">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-8 w-14" />
+          <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
+            <Skeleton className="h-4 w-20" />
+          </TableCell>
+          <TableCell className="max-w-[260px]">
+            <div className="flex min-w-0 items-center gap-3">
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-8 w-14 shrink-0" />
             </div>
           </TableCell>
+          <TableCell className="text-center">
+            <Skeleton className="mx-auto h-4 w-16" />
+          </TableCell>
+          <TableCell className="text-center">
+            <Skeleton className="mx-auto h-4 w-16" />
+          </TableCell>
+          <TableCell className="text-center">
+            <Skeleton className="mx-auto h-4 w-16" />
+          </TableCell>
+          <TableCell className="text-center">
+            <Skeleton className="mx-auto h-4 w-12" />
+          </TableCell>
           <TableCell>
-            <Skeleton className="h-4 w-32" />
-          </TableCell>
-          <TableCell className="text-right">
-            <Skeleton className="ml-auto h-4 w-16" />
-          </TableCell>
-          <TableCell className="text-right">
-            <Skeleton className="ml-auto h-4 w-16" />
-          </TableCell>
-          <TableCell className="text-right">
-            <Skeleton className="ml-auto h-4 w-16" />
-          </TableCell>
-          <TableCell className="text-right">
-            <Skeleton className="ml-auto h-4 w-16" />
-          </TableCell>
-          <TableCell className="text-right">
-            <Skeleton className="ml-auto h-4 w-12" />
+            <Skeleton className="h-4 w-64" />
           </TableCell>
         </TableRow>
       ),
@@ -205,11 +238,27 @@ function VideoList({ channelVideosState }: VideoListProps) {
       <Table>
         <TableHeader>
           <TableRow>
-            {Array.from({ length: 6 }).map((_, index) => (
-              <TableHead key={index}>
-                <Skeleton className="h-3 w-20" />
-              </TableHead>
-            ))}
+            <TableHead className="w-28 text-center">
+              <Skeleton className="h-3 w-16" />
+            </TableHead>
+            <TableHead className="max-w-[260px]">
+              <Skeleton className="h-3 w-28" />
+            </TableHead>
+            <TableHead className="text-center">
+              <Skeleton className="mx-auto h-3 w-16" />
+            </TableHead>
+            <TableHead className="text-center">
+              <Skeleton className="mx-auto h-3 w-16" />
+            </TableHead>
+            <TableHead className="text-center">
+              <Skeleton className="mx-auto h-3 w-16" />
+            </TableHead>
+            <TableHead className="text-center">
+              <Skeleton className="mx-auto h-3 w-12" />
+            </TableHead>
+            <TableHead>
+              <Skeleton className="h-3 w-32" />
+            </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>{skeletonRows}</TableBody>
@@ -217,32 +266,51 @@ function VideoList({ channelVideosState }: VideoListProps) {
     );
   } else if (shouldRenderTable) {
     bodyContent = (
-      <>
+      <TooltipProvider delayDuration={100}>
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>视频标题</TableHead>
-              <TableHead>发布时间</TableHead>
-              <TableHead className="text-right">观看</TableHead>
-              <TableHead className="text-right">点赞</TableHead>
-              <TableHead className="text-right">收藏</TableHead>
-              <TableHead className="text-right">评论</TableHead>
+              <TableHead className="w-28 text-center">发布时间</TableHead>
+              <TableHead className="max-w-[260px] text-center">
+                视频标题
+              </TableHead>
+              <TableHead className="text-center">观看</TableHead>
+              <TableHead className="text-center">点赞</TableHead>
+              <TableHead className="text-center">收藏</TableHead>
+              <TableHead className="text-center">评论</TableHead>
+              <TableHead className="max-w-[320px] text-center">
+                热门评论
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedVideos.map((video) => (
               <TableRow key={video.id}>
-                <TableCell>
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium" title={video.title}>
-                      {video.title}
-                    </span>
+                <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
+                  {formatPublishedAt(video.publishedAt)}
+                </TableCell>
+                <TableCell className="max-w-[260px]">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="min-w-0 flex-1 truncate font-medium">
+                          {video.title}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent
+                        side="top"
+                        align="start"
+                        className="max-w-sm break-words"
+                      >
+                        {video.title}
+                      </TooltipContent>
+                    </Tooltip>
                     {video.thumbnailUrl ? (
                       <a
                         href={`https://www.youtube.com/watch?v=${video.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="group inline-flex"
+                        className="group inline-flex shrink-0"
                       >
                         <img
                           src={video.thumbnailUrl}
@@ -254,18 +322,25 @@ function VideoList({ channelVideosState }: VideoListProps) {
                     ) : null}
                   </div>
                 </TableCell>
-                <TableCell>{formatPublishedAt(video.publishedAt)}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-center">
                   {formatCount(video.viewCount)}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-center">
                   {formatCount(video.likeCount)}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-center">
                   {formatCount(video.favoriteCount)}
                 </TableCell>
-                <TableCell className="text-right">
+                <TableCell className="text-center">
                   {formatCount(video.commentCount)}
+                </TableCell>
+                <TableCell className="max-w-[320px] text-sm text-muted-foreground text-center">
+                  <span
+                    className="block truncate"
+                    title={video.topComment || "暂无热门评论"}
+                  >
+                    {video.topComment || "暂无热门评论"}
+                  </span>
                 </TableCell>
               </TableRow>
             ))}
@@ -315,7 +390,7 @@ function VideoList({ channelVideosState }: VideoListProps) {
             </PaginationContent>
           </Pagination>
         )}
-      </>
+      </TooltipProvider>
     );
   } else if (hasChannelMetadata) {
     bodyContent = (
