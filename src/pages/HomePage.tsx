@@ -30,6 +30,7 @@ import {
   MessageCircleQuestionMark,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import helpGif from "@/assets/gif/help.gif";
 
 type YouTubeSearchItem = {
@@ -42,6 +43,8 @@ type YouTubeSearchItem = {
 };
 
 function HomePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [suggestions, setSuggestions] = useState<ChannelSuggestion[]>([]);
   const [channelVideosState, setChannelVideosState] =
     useState<ChannelVideosState>({
@@ -54,13 +57,29 @@ function HomePage() {
   const searchInputRef = useRef<SearchInputHandle | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isGlobalSearchEnabled, setIsGlobalSearchEnabled] = useState(false);
+  const [isHotCommentsEnabled, setIsHotCommentsEnabled] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false);
   const wasDataReadyRef = useRef(false);
+  const isHotCommentEffectInitializedRef = useRef(false);
   const isDataReady =
     Boolean(channelVideosState.channelMetadata) &&
     !channelVideosState.isLoading &&
     !channelVideosState.error;
+
+  const handleHotCommentsToggle = (checked: boolean) => {
+    setIsHotCommentsEnabled(checked);
+  };
+
+  useEffect(() => {
+    const restoreState =
+      (location.state as { restoreSearchState?: ChannelVideosState } | null)
+        ?.restoreSearchState;
+    if (!restoreState) return;
+    setChannelVideosState(restoreState);
+    setSuggestions([]);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
 
   const handleSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
@@ -138,6 +157,15 @@ function HomePage() {
     wasDataReadyRef.current = isDataReady;
   }, [isDataReady]);
 
+  useEffect(() => {
+    if (!isHotCommentEffectInitializedRef.current) {
+      isHotCommentEffectInitializedRef.current = true;
+      return;
+    }
+
+    searchInputRef.current?.submitCurrentQuery();
+  }, [isHotCommentsEnabled]);
+
   const handleSearchPanelToggle = () => {
     setIsSearchCollapsed((previous) => !previous);
   };
@@ -191,6 +219,7 @@ function HomePage() {
                   suggestions={suggestions}
                   onChannelVideosUpdate={(next) => setChannelVideosState(next)}
                   isGlobalSearchEnabled={isGlobalSearchEnabled}
+                  loadHotComments={isHotCommentsEnabled}
                 />
               </div>
               <HoverCard openDelay={100}>
@@ -214,18 +243,33 @@ function HomePage() {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                id="global-search-toggle"
-                checked={isGlobalSearchEnabled}
-                onCheckedChange={handleGlobalSearchToggle}
-              />
-              <Label
-                htmlFor="global-search-toggle"
-                className="text-sm text-muted-foreground"
-              >
-                全站搜索
-              </Label>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="hot-comments-toggle"
+                  checked={isHotCommentsEnabled}
+                  onCheckedChange={handleHotCommentsToggle}
+                />
+                <Label
+                  htmlFor="hot-comments-toggle"
+                  className="text-sm text-muted-foreground"
+                >
+                  热门评论
+                </Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="global-search-toggle"
+                  checked={isGlobalSearchEnabled}
+                  onCheckedChange={handleGlobalSearchToggle}
+                />
+                <Label
+                  htmlFor="global-search-toggle"
+                  className="text-sm text-muted-foreground"
+                >
+                  全站搜索
+                </Label>
+              </div>
             </div>
           </div>
         </div>
@@ -234,6 +278,7 @@ function HomePage() {
         <VideoList
           channelVideosState={channelVideosState}
           onRefresh={handleManualRefresh}
+          showHotComments={isHotCommentsEnabled}
         />
       </div>
       <AlertDialog

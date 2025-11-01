@@ -33,15 +33,21 @@ import type { ChannelVideosState } from "@/features/home/search-input";
 import { MessageCircle, RefreshCw, ThumbsUp } from "lucide-react";
 import type { JSX, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 
 const PAGE_SIZE = 10;
 
 interface VideoListProps {
   channelVideosState: ChannelVideosState;
   onRefresh?: () => void;
+  showHotComments?: boolean;
 }
 
-function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
+function VideoList({
+  channelVideosState,
+  onRefresh,
+  showHotComments = false,
+}: VideoListProps) {
   const { channelName, channelMetadata, videos, isLoading, error } =
     channelVideosState;
 
@@ -64,7 +70,13 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
   const formatCount = (value: number) => numberFormatter.format(value);
 
   const formatChannelMetric = (value: number) => {
-    if (!Number.isFinite(value) || value <= 0) return "0w";
+    if (!Number.isFinite(value) || value <= 0) return "0";
+    if (value < 1000) return formatCount(Math.round(value));
+    if (value < 10000) {
+      const kValue = value / 1000;
+      const formatted = kValue.toFixed(2).replace(/\.?0+$/, "");
+      return `${formatted}k`;
+    }
     const wValue = value / 10000;
     const formatted =
       wValue >= 100
@@ -107,6 +119,11 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
     const startIndex = (currentPage - 1) * PAGE_SIZE;
     return videos.slice(startIndex, startIndex + PAGE_SIZE);
   }, [currentPage, videos]);
+
+  const searchStateSnapshot = useMemo(
+    () => channelVideosState,
+    [channelVideosState],
+  );
 
   const paginationItems = useMemo(() => {
     if (totalPages <= 1) return [];
@@ -289,9 +306,11 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
           <TableCell className="text-center">
             <Skeleton className="mx-auto h-4 w-16" />
           </TableCell>
-          <TableCell className="text-left">
-            <Skeleton className="h-4 w-64" />
-          </TableCell>
+          {showHotComments ? (
+            <TableCell className="text-left">
+              <Skeleton className="h-4 w-64" />
+            </TableCell>
+          ) : null}
         </TableRow>
       ),
     );
@@ -315,9 +334,11 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
             <TableHead className="text-center">
               <Skeleton className="mx-auto h-3 w-16" />
             </TableHead>
-            <TableHead className="text-left">
-              <Skeleton className="h-3 w-32" />
-            </TableHead>
+            {showHotComments ? (
+              <TableHead className="text-left">
+                <Skeleton className="h-3 w-32" />
+              </TableHead>
+            ) : null}
           </TableRow>
         </TableHeader>
         <TableBody>{skeletonRows}</TableBody>
@@ -336,66 +357,25 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
               <TableHead className="text-center">观看</TableHead>
               <TableHead className="text-center">点赞</TableHead>
               <TableHead className="text-center">评论</TableHead>
-              <TableHead className="max-w-[320px] text-center">
-                热门评论
-              </TableHead>
+              {showHotComments ? (
+                <TableHead className="max-w-[320px] text-center">
+                  热门评论
+                </TableHead>
+              ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedVideos.map((video) => {
-              const commentTitle = video.topComment?.trim() ?? "";
-              const hasCommentTitle = commentTitle.length > 0;
-              const displayTitle = hasCommentTitle
-                ? truncateText(commentTitle)
-                : "暂无标题";
+              if (!channelMetadata) return null;
+              let hotCommentCell: JSX.Element | null = null;
+              if (showHotComments) {
+                const commentTitle = video.topComment?.trim() ?? "";
+                const hasCommentTitle = commentTitle.length > 0;
+                const displayTitle = hasCommentTitle
+                  ? truncateText(commentTitle)
+                  : "暂无评论";
 
-              return (
-                <TableRow key={video.id}>
-                  <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
-                    {formatPublishedAt(video.publishedAt)}
-                  </TableCell>
-                  <TableCell className="max-w-[260px]">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="min-w-0 flex-1 truncate font-medium">
-                            {video.title}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="top"
-                          align="start"
-                          className="max-w-sm break-words"
-                        >
-                          {video.title}
-                        </TooltipContent>
-                      </Tooltip>
-                      {video.thumbnailUrl ? (
-                        <a
-                          href={`https://www.youtube.com/watch?v=${video.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group inline-flex shrink-0"
-                        >
-                          <img
-                            src={video.thumbnailUrl}
-                            alt={`${video.title} 缩略图`}
-                            loading="lazy"
-                            className="h-8 w-14 rounded object-cover transition-transform duration-150 group-hover:scale-105"
-                          />
-                        </a>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {formatCount(video.viewCount)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {formatCount(video.likeCount)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    {formatCount(video.commentCount)}
-                  </TableCell>
+                hotCommentCell = (
                   <TableCell className="max-w-[320px] text-left text-sm text-muted-foreground">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -434,6 +414,84 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
+                );
+              }
+
+              return (
+                <TableRow key={video.id}>
+                  <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
+                    {formatPublishedAt(video.publishedAt)}
+                  </TableCell>
+                  <TableCell className="max-w-[260px]">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Link
+                            to={`/detail/${video.id}`}
+                            state={{
+                              video,
+                              channel: channelMetadata,
+                              relatedVideos: videos
+                                .filter((item) => item.id !== video.id)
+                                .slice(0, 5),
+                              searchState: searchStateSnapshot,
+                            }}
+                            className="min-w-0 flex-1 truncate font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          >
+                            {video.title}
+                          </Link>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          align="start"
+                          className="max-w-sm break-words"
+                        >
+                          {video.title}
+                        </TooltipContent>
+                      </Tooltip>
+                      {video.thumbnailUrl ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <a
+                              href={`https://www.youtube.com/watch?v=${video.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group inline-flex shrink-0"
+                            >
+                              <img
+                                src={video.thumbnailUrl}
+                                alt={`${video.title} 缩略图`}
+                                loading="lazy"
+                                className="h-8 w-14 rounded object-cover transition-transform duration-150 group-hover:scale-105"
+                              />
+                            </a>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            align="end"
+                            className="p-0"
+                          >
+                            <img
+                              src={video.thumbnailUrl}
+                              alt={`${video.title} 预览图`}
+                              loading="lazy"
+                              className="h-48 w-auto max-w-xs rounded-md border border-border/40 bg-background object-cover shadow-lg"
+                            />
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.viewCount)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.likeCount)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.commentCount)}
+                  </TableCell>
+                  {hotCommentCell}
                 </TableRow>
               );
             })}

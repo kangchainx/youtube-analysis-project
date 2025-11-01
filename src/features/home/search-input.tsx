@@ -139,6 +139,7 @@ export type ChannelSuggestion = {
 
 export type SearchInputHandle = {
   refresh: () => void;
+  submitCurrentQuery: () => void;
 };
 
 interface SearchInputProps {
@@ -146,6 +147,7 @@ interface SearchInputProps {
   suggestions?: ChannelSuggestion[];
   onChannelVideosUpdate?: (state: ChannelVideosState) => void;
   isGlobalSearchEnabled?: boolean;
+  loadHotComments?: boolean;
 }
 
 const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
@@ -155,6 +157,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       suggestions = [],
       onChannelVideosUpdate,
       isGlobalSearchEnabled = false,
+      loadHotComments = false,
     }: SearchInputProps,
     ref,
   ) {
@@ -166,7 +169,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       null,
     );
 
-    const resetChannelVideos = () => {
+    const resetChannelVideos = useCallback(() => {
       videosAbortControllerRef.current?.abort();
       videosAbortControllerRef.current = null;
       lastRequestRef.current = null;
@@ -177,7 +180,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         error: null,
         isLoading: false,
       });
-    };
+    }, [onChannelVideosUpdate]);
 
     const loadChannelVideos = useCallback(
       async (rawQuery: string, options?: { channelId?: string }) => {
@@ -476,7 +479,12 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             return results;
           };
 
-          const topCommentsMap = await fetchTopComments(channelId);
+          const topCommentsMap = loadHotComments
+            ? await fetchTopComments(channelId)
+            : new Map<
+                string,
+                { text: string; likeCount: number; replyCount: number }
+              >();
 
           if (videosAbortControllerRef.current !== controller) return;
 
@@ -544,8 +552,33 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           }
         }
       },
-      [onChannelVideosUpdate],
+      [loadHotComments, onChannelVideosUpdate],
     );
+
+    const runCurrentQuery = useCallback(() => {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        if (isGlobalSearchEnabled) {
+          void onSearch("");
+        } else {
+          resetChannelVideos();
+        }
+        return;
+      }
+
+      if (isGlobalSearchEnabled) {
+        void onSearch(trimmed);
+        return;
+      }
+
+      void loadChannelVideos(trimmed);
+    }, [
+      isGlobalSearchEnabled,
+      loadChannelVideos,
+      onSearch,
+      resetChannelVideos,
+      value,
+    ]);
 
     useImperativeHandle(
       ref,
@@ -557,8 +590,9 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             channelId: lastRequest.channelId,
           });
         },
+        submitCurrentQuery: runCurrentQuery,
       }),
-      [loadChannelVideos],
+      [loadChannelVideos, runCurrentQuery],
     );
 
     const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
