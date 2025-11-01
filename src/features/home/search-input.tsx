@@ -141,7 +141,11 @@ export type ChannelSuggestion = {
 export type SearchInputHandle = {
   refresh: () => boolean;
   submitCurrentQuery: () => void;
-  hydrateLastRequest: (payload: { query: string; channelId?: string; inputValue?: string }) => void;
+  hydrateLastRequest: (payload: {
+    query: string;
+    channelId?: string;
+    inputValue?: string;
+  }) => void;
 };
 
 interface SearchInputProps {
@@ -277,7 +281,6 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
           if (videosAbortControllerRef.current !== controller) return;
           pushState({
-            channelName: normalizedChannelName,
             channelId,
             channelMetadata,
           });
