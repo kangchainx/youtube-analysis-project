@@ -73,17 +73,38 @@ function HomePage() {
   };
 
   useEffect(() => {
-    const restoreState =
-      (location.state as { restoreSearchState?: ChannelVideosState } | null)
-        ?.restoreSearchState;
-    if (!restoreState) return;
-    setChannelVideosState(restoreState);
-    const api = searchInputRef.current;
-    api?.hydrateLastRequest({
-      query: restoreState.channelMetadata?.handle ?? restoreState.channelName,
-      channelId: restoreState.channelId,
-      inputValue: restoreState.channelName,
-    });
+    const locationState =
+      (location.state as {
+        restoreSearchState?: ChannelVideosState;
+        restoreHotComments?: boolean;
+        restoreGlobalSearch?: boolean;
+      } | null) ?? null;
+
+    if (!locationState) return;
+
+    const { restoreSearchState, restoreHotComments, restoreGlobalSearch } =
+      locationState;
+
+    if (typeof restoreHotComments === "boolean") {
+      setIsHotCommentsEnabled(restoreHotComments);
+    }
+
+    if (typeof restoreGlobalSearch === "boolean") {
+      setIsGlobalSearchEnabled(restoreGlobalSearch);
+    }
+
+    if (restoreSearchState) {
+      setChannelVideosState(restoreSearchState);
+      const api = searchInputRef.current;
+      api?.hydrateLastRequest({
+        query:
+          restoreSearchState.channelMetadata?.handle ??
+          restoreSearchState.channelName,
+        channelId: restoreSearchState.channelId,
+        inputValue: restoreSearchState.channelName,
+      });
+    }
+
     setSuggestions([]);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
@@ -309,6 +330,7 @@ function HomePage() {
           channelVideosState={channelVideosState}
           onRefresh={handleManualRefresh}
           showHotComments={isHotCommentsEnabled}
+          isGlobalSearchEnabled={isGlobalSearchEnabled}
         />
       </div>
       <AlertDialog

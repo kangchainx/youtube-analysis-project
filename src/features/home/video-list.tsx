@@ -57,12 +57,14 @@ interface VideoListProps {
   channelVideosState: ChannelVideosState;
   onRefresh?: () => void;
   showHotComments?: boolean;
+  isGlobalSearchEnabled?: boolean;
 }
 
 function VideoList({
   channelVideosState,
   onRefresh,
   showHotComments = false,
+  isGlobalSearchEnabled = false,
 }: VideoListProps) {
   const { channelName, channelMetadata, videos, isLoading, error } =
     channelVideosState;
@@ -632,6 +634,8 @@ function VideoList({
                                 .filter((item) => item.id !== video.id)
                                 .slice(0, 5),
                               searchState: searchStateSnapshot,
+                              hotCommentsEnabled: showHotComments,
+                              globalSearchEnabled: isGlobalSearchEnabled,
                             }}
                             className="min-w-0 flex-1 truncate font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
@@ -724,6 +728,8 @@ function VideoList({
                           .filter((item) => item.id !== video.id)
                           .slice(0, 5),
                         searchState: searchStateSnapshot,
+                        hotCommentsEnabled: showHotComments,
+                        globalSearchEnabled: isGlobalSearchEnabled,
                       }}
                       className="line-clamp-2 text-sm font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >

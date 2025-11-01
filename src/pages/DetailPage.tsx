@@ -25,6 +25,8 @@ type DetailPageLocationState = {
   channel?: ChannelMetadata;
   relatedVideos?: VideoTableRow[];
   searchState?: ChannelVideosState;
+  hotCommentsEnabled?: boolean;
+  globalSearchEnabled?: boolean;
 };
 
 type DetailVideoStatistics = {
@@ -404,9 +406,25 @@ function DetailPage(): JSX.Element {
     : null;
 
   const handleBack = () => {
-    if (state?.searchState) {
+    const hasSearchState = Boolean(state?.searchState);
+    const hasHotCommentState =
+      typeof state?.hotCommentsEnabled === "boolean";
+    const hasGlobalSearchState =
+      typeof state?.globalSearchEnabled === "boolean";
+
+    if (hasSearchState || hasHotCommentState || hasGlobalSearchState) {
       navigate("/home", {
-        state: { restoreSearchState: state.searchState },
+        state: {
+          ...(hasSearchState
+            ? { restoreSearchState: state?.searchState }
+            : {}),
+          ...(hasHotCommentState
+            ? { restoreHotComments: state?.hotCommentsEnabled }
+            : {}),
+          ...(hasGlobalSearchState
+            ? { restoreGlobalSearch: state?.globalSearchEnabled }
+            : {}),
+        },
         replace: true,
       });
       return;
