@@ -126,6 +126,7 @@ export type ChannelMetadata = {
 
 export type ChannelVideosState = {
   channelName: string;
+  channelId: string;
   channelMetadata: ChannelMetadata | null;
   videos: VideoTableRow[];
   error: string | null;
@@ -138,8 +139,9 @@ export type ChannelSuggestion = {
 };
 
 export type SearchInputHandle = {
-  refresh: () => void;
+  refresh: () => boolean;
   submitCurrentQuery: () => void;
+  hydrateLastRequest: (payload: { query: string; channelId?: string; inputValue?: string }) => void;
 };
 
 interface SearchInputProps {
@@ -175,6 +177,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       lastRequestRef.current = null;
       onChannelVideosUpdate?.({
         channelName: "",
+        channelId: "",
         channelMetadata: null,
         videos: [],
         error: null,
@@ -199,6 +202,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
         let currentState: ChannelVideosState = {
           channelName: trimmed,
+          channelId: resolvedChannelId ?? "",
           channelMetadata: null,
           videos: [],
           error: null,
@@ -247,6 +251,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               channelMetadata: null,
               videos: [],
               isLoading: false,
+              channelId: "",
             });
             return;
           }
@@ -273,6 +278,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           if (videosAbortControllerRef.current !== controller) return;
           pushState({
             channelName: normalizedChannelName,
+            channelId,
             channelMetadata,
           });
 
@@ -585,12 +591,28 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       () => ({
         refresh: () => {
           const lastRequest = lastRequestRef.current;
-          if (!lastRequest) return;
+          if (!lastRequest) return false;
           void loadChannelVideos(lastRequest.query, {
             channelId: lastRequest.channelId,
           });
+          return true;
         },
         submitCurrentQuery: runCurrentQuery,
+        hydrateLastRequest: ({ query, channelId, inputValue }) => {
+          const normalizedQuery = query.trim();
+          const normalizedChannelId = channelId?.trim();
+
+          if (!normalizedQuery && !normalizedChannelId) return;
+
+          lastRequestRef.current = {
+            query: normalizedQuery || normalizedChannelId || "",
+            channelId: normalizedChannelId,
+          };
+
+          if (normalizedQuery || inputValue) {
+            setValue(inputValue ?? normalizedQuery);
+          }
+        },
       }),
       [loadChannelVideos, runCurrentQuery],
     );

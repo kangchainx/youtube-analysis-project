@@ -49,6 +49,7 @@ function HomePage() {
   const [channelVideosState, setChannelVideosState] =
     useState<ChannelVideosState>({
       channelName: "",
+      channelId: "",
       channelMetadata: null,
       videos: [],
       error: null,
@@ -77,6 +78,12 @@ function HomePage() {
         ?.restoreSearchState;
     if (!restoreState) return;
     setChannelVideosState(restoreState);
+    const api = searchInputRef.current;
+    api?.hydrateLastRequest({
+      query: restoreState.channelMetadata?.handle ?? restoreState.channelName,
+      channelId: restoreState.channelId,
+      inputValue: restoreState.channelName,
+    });
     setSuggestions([]);
     navigate(location.pathname, { replace: true, state: null });
   }, [location.pathname, location.state, navigate]);
@@ -129,8 +136,31 @@ function HomePage() {
   }, []);
 
   const handleManualRefresh = useCallback(() => {
-    searchInputRef.current?.refresh();
-  }, []);
+    const api = searchInputRef.current;
+    if (!api) return;
+
+    const didRefresh = api.refresh();
+    if (didRefresh) return;
+
+    const fallbackChannelId = channelVideosState.channelId.trim();
+    const fallbackHandle =
+      channelVideosState.channelMetadata?.handle?.trim() ?? "";
+    const displayName = channelVideosState.channelName.trim();
+
+    if (!fallbackHandle && !fallbackChannelId && !displayName) return;
+
+    api.hydrateLastRequest({
+      query: fallbackHandle || displayName,
+      channelId: fallbackChannelId || undefined,
+      inputValue: displayName || fallbackHandle,
+    });
+
+    void api.refresh();
+  }, [
+    channelVideosState.channelId,
+    channelVideosState.channelMetadata?.handle,
+    channelVideosState.channelName,
+  ]);
 
   const handleGlobalSearchToggle = (nextValue: boolean) => {
     if (nextValue) {
