@@ -13,8 +13,12 @@
 <!-- TODO: 在此添加项目截图，例如使用 Markdown 图片语法或 HTML 标签 -->
 
 ![alt text](./public/login.png)
-![alt text](./public/search.png)
-![alt text](./public/video-result.png)
+![alt text](./public/home.png)
+![alt text](./public/search_result_list.png)
+![alt text](./public/search_result_card.png)
+![alt text](./public/search_result_detail1.png)
+![alt text](./public/search_result_detail2.png)
+![alt text](./public/video_detail.png)
 
 ## 技术栈说明
 
