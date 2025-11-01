@@ -9,6 +9,7 @@ import {
   Pagination,
   PaginationContent,
   PaginationItem,
+  PaginationEllipsis,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
@@ -29,7 +30,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type { ChannelVideosState } from "@/features/home/search-input";
-import { RefreshCw } from "lucide-react";
+import { MessageCircle, RefreshCw, ThumbsUp } from "lucide-react";
 import type { JSX, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 
@@ -62,6 +63,22 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
 
   const formatCount = (value: number) => numberFormatter.format(value);
 
+  const formatChannelMetric = (value: number) => {
+    if (!Number.isFinite(value) || value <= 0) return "0w";
+    const wValue = value / 10000;
+    const formatted =
+      wValue >= 100
+        ? Math.round(wValue).toString()
+        : wValue.toFixed(2).replace(/\.?0+$/, "");
+    return `${formatted}w`;
+  };
+
+  const truncateText = (value: string, maxLength = 60) => {
+    if (!value) return "";
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength).trimEnd()}...`;
+  };
+
   const formatPublishedAt = (value: string) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -91,6 +108,50 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
     return videos.slice(startIndex, startIndex + PAGE_SIZE);
   }, [currentPage, videos]);
 
+  const paginationItems = useMemo(() => {
+    if (totalPages <= 1) return [];
+
+    const items: Array<
+      | { type: "page"; page: number }
+      | { type: "ellipsis"; key: "left" | "right" }
+    > = [];
+
+    if (totalPages <= 7) {
+      return Array.from({ length: totalPages }, (_, index) => ({
+        type: "page" as const,
+        page: index + 1,
+      }));
+    }
+
+    items.push({ type: "page", page: 1 });
+
+    if (currentPage <= 4) {
+      for (let page = 2; page <= Math.min(5, totalPages - 1); page += 1) {
+        items.push({ type: "page", page });
+      }
+      items.push({ type: "ellipsis", key: "right" });
+    } else if (currentPage >= totalPages - 3) {
+      items.push({ type: "ellipsis", key: "left" });
+      for (
+        let page = Math.max(totalPages - 4, 2);
+        page < totalPages;
+        page += 1
+      ) {
+        items.push({ type: "page", page });
+      }
+    } else {
+      items.push({ type: "ellipsis", key: "left" });
+      for (let page = currentPage - 1; page <= currentPage + 1; page += 1) {
+        items.push({ type: "page", page });
+      }
+      items.push({ type: "ellipsis", key: "right" });
+    }
+
+    items.push({ type: "page", page: totalPages });
+
+    return items;
+  }, [currentPage, totalPages]);
+
   const handlePreviousPage = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
     if (currentPage <= 1) return;
@@ -108,7 +169,7 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
     page: number,
   ) => {
     event.preventDefault();
-    if (page === currentPage) return;
+    if (page === currentPage || page < 1 || page > totalPages) return;
     setCurrentPage(page);
   };
 
@@ -170,8 +231,12 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
         ) : null}
         <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
           <span>视频数: {formatCount(channelMetadata.videoCount)}</span>
-          <span>订阅数: {formatCount(channelMetadata.subscriberCount)}</span>
-          <span>总观看次数: {formatCount(channelMetadata.viewCount)}</span>
+          <span>
+            订阅数: {formatChannelMetric(channelMetadata.subscriberCount)}
+          </span>
+          <span>
+            总观看次数: {formatChannelMetric(channelMetadata.viewCount)}
+          </span>
         </div>
       </div>
     );
@@ -224,10 +289,7 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
           <TableCell className="text-center">
             <Skeleton className="mx-auto h-4 w-16" />
           </TableCell>
-          <TableCell className="text-center">
-            <Skeleton className="mx-auto h-4 w-12" />
-          </TableCell>
-          <TableCell>
+          <TableCell className="text-left">
             <Skeleton className="h-4 w-64" />
           </TableCell>
         </TableRow>
@@ -253,10 +315,7 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
             <TableHead className="text-center">
               <Skeleton className="mx-auto h-3 w-16" />
             </TableHead>
-            <TableHead className="text-center">
-              <Skeleton className="mx-auto h-3 w-12" />
-            </TableHead>
-            <TableHead>
+            <TableHead className="text-left">
               <Skeleton className="h-3 w-32" />
             </TableHead>
           </TableRow>
@@ -276,7 +335,6 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
               </TableHead>
               <TableHead className="text-center">观看</TableHead>
               <TableHead className="text-center">点赞</TableHead>
-              <TableHead className="text-center">收藏</TableHead>
               <TableHead className="text-center">评论</TableHead>
               <TableHead className="max-w-[320px] text-center">
                 热门评论
@@ -284,66 +342,101 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedVideos.map((video) => (
-              <TableRow key={video.id}>
-                <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
-                  {formatPublishedAt(video.publishedAt)}
-                </TableCell>
-                <TableCell className="max-w-[260px]">
-                  <div className="flex min-w-0 items-center gap-3">
+            {paginatedVideos.map((video) => {
+              const commentTitle = video.topComment?.trim() ?? "";
+              const hasCommentTitle = commentTitle.length > 0;
+              const displayTitle = hasCommentTitle
+                ? truncateText(commentTitle)
+                : "暂无标题";
+
+              return (
+                <TableRow key={video.id}>
+                  <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
+                    {formatPublishedAt(video.publishedAt)}
+                  </TableCell>
+                  <TableCell className="max-w-[260px]">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="min-w-0 flex-1 truncate font-medium">
+                            {video.title}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent
+                          side="top"
+                          align="start"
+                          className="max-w-sm break-words"
+                        >
+                          {video.title}
+                        </TooltipContent>
+                      </Tooltip>
+                      {video.thumbnailUrl ? (
+                        <a
+                          href={`https://www.youtube.com/watch?v=${video.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group inline-flex shrink-0"
+                        >
+                          <img
+                            src={video.thumbnailUrl}
+                            alt={`${video.title} 缩略图`}
+                            loading="lazy"
+                            className="h-8 w-14 rounded object-cover transition-transform duration-150 group-hover:scale-105"
+                          />
+                        </a>
+                      ) : null}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.viewCount)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.likeCount)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {formatCount(video.commentCount)}
+                  </TableCell>
+                  <TableCell className="max-w-[320px] text-left text-sm text-muted-foreground">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <span className="min-w-0 flex-1 truncate font-medium">
-                          {video.title}
+                        <span className="block max-w-full truncate font-medium">
+                          {displayTitle}
                         </span>
                       </TooltipTrigger>
                       <TooltipContent
                         side="top"
                         align="start"
-                        className="max-w-sm break-words"
+                        className="max-w-sm break-words text-left"
                       >
-                        {video.title}
+                        {hasCommentTitle ? (
+                          <>
+                            <p>{commentTitle}</p>
+                            <p className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <ThumbsUp
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
+                                {formatCount(video.topCommentLikeCount)}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <MessageCircle
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
+                                {formatCount(video.topCommentReplyCount)}
+                              </span>
+                            </p>
+                          </>
+                        ) : (
+                          <p>{displayTitle}</p>
+                        )}
                       </TooltipContent>
                     </Tooltip>
-                    {video.thumbnailUrl ? (
-                      <a
-                        href={`https://www.youtube.com/watch?v=${video.id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="group inline-flex shrink-0"
-                      >
-                        <img
-                          src={video.thumbnailUrl}
-                          alt={`${video.title} 缩略图`}
-                          loading="lazy"
-                          className="h-8 w-14 rounded object-cover transition-transform duration-150 group-hover:scale-105"
-                        />
-                      </a>
-                    ) : null}
-                  </div>
-                </TableCell>
-                <TableCell className="text-center">
-                  {formatCount(video.viewCount)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {formatCount(video.likeCount)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {formatCount(video.favoriteCount)}
-                </TableCell>
-                <TableCell className="text-center">
-                  {formatCount(video.commentCount)}
-                </TableCell>
-                <TableCell className="max-w-[320px] text-sm text-muted-foreground text-center">
-                  <span
-                    className="block truncate"
-                    title={video.topComment || "暂无热门评论"}
-                  >
-                    {video.topComment || "暂无热门评论"}
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
         {totalPages > 1 && (
@@ -361,20 +454,25 @@ function VideoList({ channelVideosState, onRefresh }: VideoListProps) {
                   }
                 />
               </PaginationItem>
-              {Array.from({ length: totalPages }, (_, index) => {
-                const page = index + 1;
-                return (
-                  <PaginationItem key={page}>
+              {paginationItems.map((item, index) =>
+                item.type === "ellipsis" ? (
+                  <PaginationItem key={`ellipsis-${item.key}-${index}`}>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                ) : (
+                  <PaginationItem key={item.page}>
                     <PaginationLink
                       href="#"
-                      isActive={page === currentPage}
-                      onClick={(event) => handleDirectPageSelect(event, page)}
+                      isActive={item.page === currentPage}
+                      onClick={(event) =>
+                        handleDirectPageSelect(event, item.page)
+                      }
                     >
-                      {page}
+                      {item.page}
                     </PaginationLink>
                   </PaginationItem>
-                );
-              })}
+                ),
+              )}
               <PaginationItem>
                 <PaginationNext
                   href="#"

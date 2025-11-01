@@ -24,7 +24,11 @@ import SearchInput, {
 import VideoList from "@/features/home/video-list";
 import { searchList } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
-import { CircleHelp, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  MessageCircleQuestionMark,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import helpGif from "@/assets/gif/help.gif";
 
@@ -198,7 +202,7 @@ function HomePage() {
                     aria-label="查看帮助"
                     className="rounded-full border border-border/70"
                   >
-                    <CircleHelp className="h-4 w-4" />
+                    <MessageCircleQuestionMark className="h-4 w-4" />
                   </Button>
                 </HoverCardTrigger>
                 <HoverCardContent side="top" align="end" className="w-72 p-3">

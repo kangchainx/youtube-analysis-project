@@ -3,6 +3,9 @@ const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 const YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos";
 const YOUTUBE_PLAYLIST_ITEMS_URL =
   "https://www.googleapis.com/youtube/v3/playlistItems";
+const YOUTUBE_COMMENT_THREADS_URL =
+  "https://www.googleapis.com/youtube/v3/commentThreads";
+const YOUTUBE_COMMENTS_URL = "https://www.googleapis.com/youtube/v3/comments";
 
 type Primitive = string | number | boolean;
 
@@ -27,6 +30,18 @@ export interface VideosListOptions {
 }
 
 export interface PlaylistItemsListOptions {
+  params: Record<string, QueryValue>;
+  signal?: AbortSignal;
+  headers?: HeadersInit;
+}
+
+export interface CommentThreadsListOptions {
+  params: Record<string, QueryValue>;
+  signal?: AbortSignal;
+  headers?: HeadersInit;
+}
+
+export interface CommentsListOptions {
   params: Record<string, QueryValue>;
   signal?: AbortSignal;
   headers?: HeadersInit;
@@ -148,6 +163,60 @@ export async function playlistItemsList({
     const errorBody = await response.text().catch(() => "");
     throw new Error(
       `YouTube playlistItems.list request failed: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody}` : ""}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function commentThreadsList({
+  params,
+  signal,
+  headers,
+}: CommentThreadsListOptions) {
+  const query = createQueryString(params);
+  const url = query
+    ? `${YOUTUBE_COMMENT_THREADS_URL}?${query}`
+    : YOUTUBE_COMMENT_THREADS_URL;
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      ...headers,
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(
+      `YouTube commentThreads.list request failed: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody}` : ""}`,
+    );
+  }
+
+  return response.json();
+}
+
+export async function commentsList({
+  params,
+  signal,
+  headers,
+}: CommentsListOptions) {
+  const query = createQueryString(params);
+  const url = query ? `${YOUTUBE_COMMENTS_URL}?${query}` : YOUTUBE_COMMENTS_URL;
+
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      ...headers,
+    },
+    signal,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text().catch(() => "");
+    throw new Error(
+      `YouTube comments.list request failed: ${response.status} ${response.statusText}${errorBody ? ` - ${errorBody}` : ""}`,
     );
   }
 

@@ -1,5 +1,11 @@
 import { Input } from "@/components/ui/input";
-import { channelsList, playlistItemsList, videosList } from "@/lib/youtube";
+import {
+  channelsList,
+  commentsList,
+  commentThreadsList,
+  playlistItemsList,
+  videosList,
+} from "@/lib/youtube";
 import { Search } from "lucide-react";
 import {
   type ChangeEvent,
@@ -73,6 +79,28 @@ type VideosListItem = {
   };
 };
 
+type CommentSnippet = {
+  textDisplay?: string;
+  textOriginal?: string;
+  authorChannelId?: {
+    value?: string;
+  } | null;
+  likeCount?: number;
+  totalReplyCount?: number;
+};
+
+type CommentResource = {
+  id?: string;
+  snippet?: CommentSnippet;
+};
+
+type CommentThreadsListItem = {
+  snippet?: {
+    topLevelComment?: CommentResource;
+    totalReplyCount?: number;
+  };
+};
+
 export type VideoTableRow = {
   id: string;
   title: string;
@@ -83,6 +111,8 @@ export type VideoTableRow = {
   favoriteCount: number;
   commentCount: number;
   topComment: string;
+  topCommentLikeCount: number;
+  topCommentReplyCount: number;
 };
 
 export type ChannelMetadata = {
@@ -159,7 +189,10 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         const controller = new AbortController();
         videosAbortControllerRef.current = controller;
 
-        lastRequestRef.current = { query: trimmed, channelId: resolvedChannelId };
+        lastRequestRef.current = {
+          query: trimmed,
+          channelId: resolvedChannelId,
+        };
 
         let currentState: ChannelVideosState = {
           channelName: trimmed,
@@ -245,6 +278,14 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             { title?: string; publishedAt?: string; thumbnailUrl?: string }
           >();
 
+          const totalVideos = parseCount(stats.videoCount);
+          const resolvePlaylistPageSize = () => {
+            if (totalVideos < 200) return 50;
+            if (totalVideos <= 600) return 25;
+            return 10;
+          };
+          const playlistPageSize = resolvePlaylistPageSize();
+
           let pageToken: string | undefined;
 
           do {
@@ -252,7 +293,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               params: {
                 part: "snippet,contentDetails",
                 playlistId: uploadsPlaylistId,
-                maxResults: 50,
+                maxResults: playlistPageSize,
                 pageToken,
                 key: apiKey,
               },
@@ -325,6 +366,120 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
           if (videosAbortControllerRef.current !== controller) return;
 
+          const fetchTopComments = async (channelOwnerId: string) => {
+            const results = new Map<
+              string,
+              { text: string; likeCount: number; replyCount: number }
+            >();
+            const uniqueIds = Array.from(
+              new Set(
+                videosItems
+                  .map((item) => item.id?.trim())
+                  .filter((id): id is string => Boolean(id)),
+              ),
+            );
+
+            for (const videoId of uniqueIds) {
+              if (controller.signal.aborted) break;
+              if (videosAbortControllerRef.current !== controller) {
+                return results;
+              }
+
+              try {
+                const threadResponse = await commentThreadsList({
+                  params: {
+                    part: "snippet",
+                    videoId,
+                    order: "relevance",
+                    maxResults: 5,
+                    textFormat: "plainText",
+                    key: apiKey,
+                  },
+                  signal: controller.signal,
+                });
+
+                const threadItems = (
+                  (threadResponse?.items ?? []) as CommentThreadsListItem[]
+                ).slice(0, 5);
+
+                for (const threadItem of threadItems) {
+                  const topLevel = threadItem?.snippet?.topLevelComment ?? null;
+                  const commentId = topLevel?.id?.trim();
+                  const commentSnippet = topLevel?.snippet;
+                  const authorId =
+                    commentSnippet?.authorChannelId?.value?.trim() ?? "";
+                  const threadReplyCount =
+                    threadItem?.snippet?.totalReplyCount ?? 0;
+                  if (authorId && authorId === channelOwnerId) {
+                    continue;
+                  }
+
+                  const normalizedComment =
+                    commentSnippet?.textOriginal?.trim() ??
+                    commentSnippet?.textDisplay?.trim() ??
+                    "";
+
+                  if (normalizedComment) {
+                    results.set(videoId, {
+                      text: normalizedComment,
+                      likeCount: commentSnippet?.likeCount ?? 0,
+                      replyCount: threadReplyCount,
+                    });
+                    break;
+                  }
+
+                  if (!commentId) {
+                    continue;
+                  }
+
+                  const commentResponse = await commentsList({
+                    params: {
+                      part: "snippet",
+                      id: commentId,
+                      textFormat: "plainText",
+                      key: apiKey,
+                    },
+                    signal: controller.signal,
+                  });
+
+                  const commentItems = (commentResponse?.items ??
+                    []) as CommentResource[];
+                  const fallbackSnippet = commentItems[0]?.snippet;
+                  const fallbackAuthorId =
+                    fallbackSnippet?.authorChannelId?.value?.trim() ?? "";
+                  if (fallbackAuthorId && fallbackAuthorId === channelOwnerId) {
+                    continue;
+                  }
+                  const fallbackComment =
+                    fallbackSnippet?.textOriginal?.trim() ??
+                    fallbackSnippet?.textDisplay?.trim() ??
+                    "";
+
+                  if (fallbackComment) {
+                    results.set(videoId, {
+                      text: fallbackComment,
+                      likeCount: fallbackSnippet?.likeCount ?? 0,
+                      replyCount: threadReplyCount,
+                    });
+                    break;
+                  }
+                }
+              } catch (commentError) {
+                if (controller.signal.aborted) break;
+                console.error(
+                  `Failed to fetch top comment for video ${videoId}`,
+                  commentError,
+                );
+              }
+            }
+
+            return results;
+          };
+
+          const topCommentsMap = await fetchTopComments(channelId);
+
+          if (videosAbortControllerRef.current !== controller) return;
+
           const rows = videosItems
             .map<VideoTableRow | null>((item) => {
               const id = item.id?.trim();
@@ -350,11 +505,17 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
                 likeCount: parseCount(stats.likeCount),
                 favoriteCount: parseCount(stats.favoriteCount),
                 commentCount: parseCount(stats.commentCount),
-                topComment: "",
+                topComment: topCommentsMap.get(id)?.text ?? "",
+                topCommentLikeCount: topCommentsMap.get(id)?.likeCount ?? 0,
+                topCommentReplyCount: topCommentsMap.get(id)?.replyCount ?? 0,
               };
             })
             .filter((item): item is VideoTableRow => item !== null)
             .sort((a, b) => {
+              const viewDiff = b.viewCount - a.viewCount;
+              if (viewDiff !== 0) return viewDiff;
+              const likeDiff = b.likeCount - a.likeCount;
+              if (likeDiff !== 0) return likeDiff;
               const timeA = new Date(a.publishedAt).getTime();
               const timeB = new Date(b.publishedAt).getTime();
               const normalizedA = Number.isFinite(timeA) ? timeA : 0;
