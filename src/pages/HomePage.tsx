@@ -32,6 +32,12 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import helpGif from "@/assets/gif/help.gif";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from "@/components/ui/avatar";
 
 type YouTubeSearchItem = {
   id?: {
@@ -45,6 +51,7 @@ type YouTubeSearchItem = {
 function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout, isLoggingOut } = useAuth();
   const [suggestions, setSuggestions] = useState<ChannelSuggestion[]>([]);
   const [channelVideosState, setChannelVideosState] =
     useState<ChannelVideosState>({
@@ -227,6 +234,29 @@ function HomePage() {
     };
   }, []);
 
+  const handleLogout = useCallback(async () => {
+    await logout();
+    navigate("/", { replace: true });
+  }, [logout, navigate]);
+
+  const displayName =
+    user?.name?.trim() ||
+    user?.email?.trim() ||
+    (user ? "已登录用户" : "尚未登录");
+  const primaryEmail = user?.email?.trim() ?? "";
+  const avatarUrl =
+    (user && "picture" in user && typeof user.picture === "string"
+      ? user.picture
+      : null) ||
+    (user && "avatarUrl" in user && typeof user.avatarUrl === "string"
+      ? user.avatarUrl
+      : null) ||
+    (user && "imageUrl" in user && typeof user.imageUrl === "string"
+      ? user.imageUrl
+      : null) ||
+    null;
+  const avatarFallback = displayName ? displayName.slice(0, 2).toUpperCase() : "?";
+
   const searchPanelClasses = cn(
     "mt-4 transition-all duration-300 ease-in-out",
     isSearchCollapsed
@@ -240,6 +270,37 @@ function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-14">
+      <div className="flex w-full max-w-7xl items-center justify-end gap-3">
+        <div className="flex items-center gap-3 rounded-full border border-border/60 bg-background/95 px-3 py-1.5 shadow-sm backdrop-blur">
+          <Avatar className="h-10 w-10">
+            {avatarUrl ? (
+              <AvatarImage src={avatarUrl} alt={displayName} />
+            ) : null}
+            <AvatarFallback className="text-xs font-medium">
+              {avatarFallback}
+            </AvatarFallback>
+          </Avatar>
+          <div className="hidden sm:flex flex-col">
+            <span className="text-sm font-medium text-foreground">
+              {displayName}
+            </span>
+            {primaryEmail && (
+              <span className="text-xs text-muted-foreground">
+                {primaryEmail}
+              </span>
+            )}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+        >
+          {isLoggingOut ? "正在退出..." : "退出登录"}
+        </Button>
+      </div>
       <div className="fixed left-1/2 top-2 z-30 -translate-x-1/2">
         <Button
           type="button"
