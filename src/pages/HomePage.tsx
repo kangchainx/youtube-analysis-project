@@ -25,19 +25,15 @@ import VideoList from "@/features/home/video-list";
 import { searchList } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
 import {
+  ArrowUp,
   ChevronDown,
   ChevronUp,
   MessageCircleQuestionMark,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import helpGif from "@/assets/gif/help.gif";
-import { useAuth } from "@/contexts/AuthContext";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { useAppLayout } from "@/layouts/AppLayout";
 
 type YouTubeSearchItem = {
   id?: {
@@ -51,7 +47,7 @@ type YouTubeSearchItem = {
 function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout, isLoggingOut } = useAuth();
+  const { setProfileNavigationState } = useAppLayout();
   const [suggestions, setSuggestions] = useState<ChannelSuggestion[]>([]);
   const [channelVideosState, setChannelVideosState] =
     useState<ChannelVideosState>({
@@ -68,11 +64,9 @@ function HomePage() {
   const [isHotCommentsEnabled, setIsHotCommentsEnabled] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false);
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [showScrollTop, setShowScrollTop] = useState(false);
   const wasDataReadyRef = useRef(false);
   const isHotCommentEffectInitializedRef = useRef(false);
-  const accountMenuRef = useRef<HTMLDivElement | null>(null);
-  const accountMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const isDataReady =
     Boolean(channelVideosState.channelMetadata) &&
     !channelVideosState.isLoading &&
@@ -238,77 +232,44 @@ function HomePage() {
   }, []);
 
   useEffect(() => {
-    if (!isAccountMenuOpen) return;
+    if (typeof window === "undefined") return;
 
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node | null;
-      const menu = accountMenuRef.current;
-      const button = accountMenuButtonRef.current;
-      if (!menu || menu.contains(target)) return;
-      if (button && button.contains(target)) return;
-      setIsAccountMenuOpen(false);
+    const handleScroll = () => {
+      setShowScrollTop(window.scrollY > 100);
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsAccountMenuOpen(false);
-      }
-    };
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
 
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("scroll", handleScroll);
     };
-  }, [isAccountMenuOpen]);
+  }, []);
+
+  const profileNavigationPayload = useMemo(
+    () => ({
+      from: location.pathname,
+      restoreSearchState: channelVideosState,
+      restoreHotComments: isHotCommentsEnabled,
+      restoreGlobalSearch: isGlobalSearchEnabled,
+    }),
+    [
+      channelVideosState,
+      isGlobalSearchEnabled,
+      isHotCommentsEnabled,
+      location.pathname,
+    ],
+  );
 
   useEffect(() => {
-    setIsAccountMenuOpen(false);
-  }, [location.pathname]);
-
-  const handleLogout = useCallback(async () => {
-    setIsAccountMenuOpen(false);
-    await logout();
-    navigate("/", { replace: true });
-  }, [logout, navigate]);
-
-  const handleAccountMenuToggle = () => {
-    setIsAccountMenuOpen((previous) => !previous);
-  };
-
-  const handleNavigateToProfile = () => {
-    setIsAccountMenuOpen(false);
-    navigate("/profile", {
-      state: {
-        from: location.pathname,
-        restoreSearchState: channelVideosState,
-        restoreHotComments: isHotCommentsEnabled,
-        restoreGlobalSearch: isGlobalSearchEnabled,
-      },
-    });
-  };
-
-  const displayName =
-    user?.name?.trim() ||
-    user?.email?.trim() ||
-    (user ? "已登录用户" : "尚未登录");
-  const primaryEmail = user?.email?.trim() ?? "";
-  const avatarUrl =
-    (user && "picture" in user && typeof user.picture === "string"
-      ? user.picture
-      : null) ||
-    (user && "avatarUrl" in user && typeof user.avatarUrl === "string"
-      ? user.avatarUrl
-      : null) ||
-    (user && "imageUrl" in user && typeof user.imageUrl === "string"
-      ? user.imageUrl
-      : null) ||
-    null;
-  const avatarFallback = displayName ? displayName.slice(0, 2).toUpperCase() : "?";
+    setProfileNavigationState(profileNavigationPayload);
+    return () => {
+      setProfileNavigationState(null);
+    };
+  }, [profileNavigationPayload, setProfileNavigationState]);
 
   const searchPanelClasses = cn(
-    "mt-4 transition-all duration-300 ease-in-out",
+    "mt-3 transition-all duration-300 ease-in-out",
     isSearchCollapsed
       ? "-translate-y-4 max-h-0 overflow-hidden opacity-0 pointer-events-none"
       : "max-h-[420px] overflow-visible opacity-100 translate-y-0",
@@ -319,83 +280,8 @@ function HomePage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-14">
-      <div className="flex w-full max-w-7xl justify-end">
-        <div className="relative">
-          <Button
-            ref={accountMenuButtonRef}
-            type="button"
-            id="account-menu-button"
-            variant="ghost"
-            size="icon-lg"
-            onClick={handleAccountMenuToggle}
-            disabled={!user}
-            aria-haspopup="menu"
-            aria-expanded={isAccountMenuOpen}
-            aria-controls="account-menu"
-            className="rounded-full border border-border/60 bg-background/90 p-0 text-foreground shadow-sm transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/50"
-          >
-            <Avatar className="h-9 w-9">
-              {avatarUrl ? (
-                <AvatarImage src={avatarUrl} alt={displayName} />
-              ) : null}
-              <AvatarFallback className="text-xs font-medium">
-                {avatarFallback}
-              </AvatarFallback>
-            </Avatar>
-          </Button>
-          {isAccountMenuOpen ? (
-            <div
-              ref={accountMenuRef}
-              id="account-menu"
-              role="menu"
-              aria-labelledby="account-menu-button"
-              className="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-border/60 bg-card shadow-xl"
-            >
-              <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
-                <Avatar className="h-12 w-12">
-                  {avatarUrl ? (
-                    <AvatarImage src={avatarUrl} alt={displayName} />
-                  ) : null}
-                  <AvatarFallback className="text-sm font-medium">
-                    {avatarFallback}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-semibold text-foreground">
-                    {displayName}
-                  </span>
-                  {primaryEmail && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {primaryEmail}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col gap-1 px-2 py-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm"
-                  onClick={handleNavigateToProfile}
-                >
-                  个人信息
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="justify-start rounded-md px-3 py-2 text-sm text-destructive hover:text-destructive"
-                  onClick={handleLogout}
-                  disabled={isLoggingOut}
-                >
-                  {isLoggingOut ? "正在退出..." : "退出登录"}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </div>
-      <div className="fixed left-1/2 top-2 z-30 -translate-x-1/2">
+    <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-16 md:pt-20">
+      <div className="fixed left-1/2 top-16 z-30 -translate-x-1/2 md:top-20">
         <Button
           type="button"
           variant="ghost"
@@ -488,6 +374,19 @@ function HomePage() {
           isGlobalSearchEnabled={isGlobalSearchEnabled}
         />
       </div>
+      {showScrollTop ? (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-6 right-6 z-40 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
+          aria-label="回到顶部"
+          onClick={() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        >
+          <ArrowUp className="h-5 w-5" aria-hidden="true" />
+        </Button>
+      ) : null}
       <AlertDialog
         open={isConfirmDialogOpen}
         onOpenChange={(open) => {

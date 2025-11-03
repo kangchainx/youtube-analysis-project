@@ -14,6 +14,7 @@ export type AuthUser = {
   email: string;
   name: string | null;
   emailVerified: boolean;
+  avatar?: string | null;
   picture?: string | null;
   avatarUrl?: string | null;
   imageUrl?: string | null;
@@ -58,8 +59,7 @@ function readStoredSession(): AuthSession {
       user: parsed.user ?? null,
       token: typeof parsed.token === "string" ? parsed.token : null,
       scope: typeof parsed.scope === "string" ? parsed.scope : null,
-      expiresIn:
-        typeof parsed.expiresIn === "string" ? parsed.expiresIn : null,
+      expiresIn: typeof parsed.expiresIn === "string" ? parsed.expiresIn : null,
     };
   } catch (error) {
     console.warn("Failed to parse stored auth session", error);
@@ -161,7 +161,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoggingOut(true);
       try {
         const hasOptions = Boolean(options?.revoke);
-        await postJson("/api/auth/logout", hasOptions ? { revoke: true } : undefined);
+        await postJson(
+          "/api/auth/logout",
+          hasOptions ? { revoke: true } : undefined,
+        );
       } catch (error) {
         console.warn("Logout request failed", error);
       } finally {
@@ -192,7 +195,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       },
     }),
-    [session, isHydrated, isLoggingOut, setSession, clearSession, logout, persistSession],
+    [
+      session,
+      isHydrated,
+      isLoggingOut,
+      setSession,
+      clearSession,
+      logout,
+      persistSession,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

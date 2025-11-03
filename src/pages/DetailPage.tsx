@@ -554,28 +554,24 @@ function DetailPage(): JSX.Element {
         <p className="mt-2 text-2xl font-semibold">
           {formatCount(videoDetail?.statistics.viewCount ?? 0)}
         </p>
-        <p className="text-xs text-muted-foreground">总观看次数（标准格式）</p>
       </div>
       <div className="rounded-lg border bg-background p-4 shadow-sm">
         <span className="text-xs uppercase text-muted-foreground">点赞</span>
         <p className="mt-2 text-2xl font-semibold">
           {formatCount(videoDetail?.statistics.likeCount ?? 0)}
         </p>
-        <p className="text-xs text-muted-foreground">热门互动（点赞总数）</p>
       </div>
       <div className="rounded-lg border bg-background p-4 shadow-sm">
         <span className="text-xs uppercase text-muted-foreground">评论</span>
         <p className="mt-2 text-2xl font-semibold">
           {formatCount(videoDetail?.statistics.commentCount ?? 0)}
         </p>
-        <p className="text-xs text-muted-foreground">观众讨论量（评论数）</p>
       </div>
       <div className="rounded-lg border bg-background p-4 shadow-sm">
         <span className="text-xs uppercase text-muted-foreground">互动率</span>
         <p className="mt-2 text-2xl font-semibold">
           {engagementRate.toFixed(2)}%
         </p>
-        <p className="text-xs text-muted-foreground">点赞 / 观看 * 100</p>
       </div>
     </div>
   );

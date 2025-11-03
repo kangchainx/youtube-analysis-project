@@ -27,7 +27,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
-import { Progress } from "@/components/ui/progress";
+import { Spinner } from "@/components/ui/spinner";
 
 type ProfileStatus =
   | { type: "idle" }
@@ -37,12 +37,14 @@ type ProfileStatus =
 
 function resolveAvatarUrl(profile: UserProfile | null | undefined): string {
   if (!profile) return "";
-  const { picture, avatarUrl, imageUrl } = profile as {
+  const { avatar, picture, avatarUrl, imageUrl } = profile as {
+    avatar?: string | null;
     picture?: string | null;
     avatarUrl?: string | null;
     imageUrl?: string | null;
   };
   return (
+    avatar?.trim() ||
     picture?.trim() ||
     avatarUrl?.trim() ||
     imageUrl?.trim() ||
@@ -55,7 +57,7 @@ function ProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formState, setFormState] = useState({
     name: user?.name ?? "",
-    picture: resolveAvatarUrl(user ?? null),
+    avatar: resolveAvatarUrl(user ?? null),
   });
   const [status, setStatus] = useState<ProfileStatus>({ type: "loading" });
   const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +68,7 @@ function ProfilePage() {
   }, [profile, user]);
 
   const baselineName = baselineProfile?.name ?? "";
-  const baselinePicture = resolveAvatarUrl(baselineProfile);
+  const baselineAvatar = resolveAvatarUrl(baselineProfile);
 
   const avatarFallback = useMemo(() => {
     const source =
@@ -86,7 +88,7 @@ function ProfilePage() {
         setProfile(data);
         setFormState({
           name: data.name ?? "",
-          picture: resolveAvatarUrl(data),
+          avatar: resolveAvatarUrl(data),
         });
         setStatus({ type: "idle" });
       })
@@ -125,7 +127,7 @@ function ProfilePage() {
     if (!profile) return;
     setFormState({
       name: profile.name ?? "",
-      picture: resolveAvatarUrl(profile),
+      avatar: resolveAvatarUrl(profile),
     });
   }, [profile]);
 
@@ -143,14 +145,14 @@ function ProfilePage() {
   const handleReset = () => {
     setFormState({
       name: baselineName,
-      picture: baselinePicture,
+      avatar: baselineAvatar,
     });
     setStatus({ type: "idle" });
   };
 
   const hasChanges =
     formState.name.trim() !== baselineName.trim() ||
-    formState.picture.trim() !== baselinePicture.trim();
+    formState.avatar.trim() !== baselineAvatar.trim();
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -172,9 +174,9 @@ function ProfilePage() {
         payload.name = formState.name.trim() || null;
       }
 
-      if (formState.picture.trim() !== baselinePicture.trim()) {
-        const trimmed = formState.picture.trim();
-        payload.picture = trimmed || null;
+      if (formState.avatar.trim() !== baselineAvatar.trim()) {
+        const trimmed = formState.avatar.trim();
+        payload.avatar = trimmed || null;
       }
 
       const updatedProfile = await updateCurrentUserProfile(payload);
@@ -205,8 +207,7 @@ function ProfilePage() {
     }
   };
 
-  const currentAvatarUrl =
-    formState.picture.trim() || resolveAvatarUrl(baselineProfile);
+  const currentAvatarUrl = formState.avatar.trim() || baselineAvatar;
 
   const infoRows: Array<{ label: string; value: string | boolean | null }> = [
     { label: "用户 ID", value: baselineProfile?.id ?? "" },
@@ -230,11 +231,10 @@ function ProfilePage() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex flex-col items-center gap-3 py-10">
-              <Progress indeterminate className="w-48" />
-              <p className="text-sm text-muted-foreground">
-                正在加载个人信息，请稍候…
-              </p>
+            <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
+              <Spinner className="size-6 text-primary" />
+              <p>正在加载个人信息，请稍候…</p>
+              <p className="text-xs">若长时间未响应，可刷新页面重新尝试。</p>
             </div>
           ) : (
             <form
@@ -284,15 +284,15 @@ function ProfilePage() {
                       </FieldDescription>
                     </Field>
                     <Field>
-                      <FieldLabel htmlFor="picture">头像链接</FieldLabel>
-                      <Input
-                        id="picture"
-                        name="picture"
-                        placeholder="https://example.com/avatar.png"
-                        value={formState.picture}
-                        onChange={handleInputChange}
-                        disabled={isSaving}
-                      />
+                  <FieldLabel htmlFor="avatar">头像链接</FieldLabel>
+                  <Input
+                    id="avatar"
+                    name="avatar"
+                    placeholder="https://example.com/avatar.png"
+                    value={formState.avatar}
+                    onChange={handleInputChange}
+                    disabled={isSaving}
+                  />
                       <FieldDescription>
                         支持 PNG、JPG、SVG 等图片地址。留空则使用默认头像。
                       </FieldDescription>
