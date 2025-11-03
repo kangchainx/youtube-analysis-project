@@ -73,6 +73,7 @@ type AuthContextValue = AuthSession & {
   setSession: (session: AuthSessionPayload) => void;
   clearSession: () => void;
   logout: (options?: { revoke?: boolean }) => Promise<void>;
+  updateUser: (user: AuthUser) => void;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -182,8 +183,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession,
       clearSession,
       logout,
+      updateUser: (nextUser: AuthUser) => {
+        persistSession({
+          user: nextUser,
+          token: session.token,
+          scope: session.scope,
+          expiresIn: session.expiresIn,
+        });
+      },
     }),
-    [session, isHydrated, isLoggingOut, setSession, clearSession, logout],
+    [session, isHydrated, isLoggingOut, setSession, clearSession, logout, persistSession],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

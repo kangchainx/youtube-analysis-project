@@ -3,6 +3,7 @@ import LoginPage from "./pages/LoginPage";
 import HomePage from "./pages/HomePage";
 import DetailPage from "./pages/DetailPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
+import ProfilePage from "./pages/ProfilePage";
 import { RequireAuth } from "@/routes/RequireAuth";
 
 function App() {
@@ -15,6 +16,14 @@ function App() {
         element={
           <RequireAuth>
             <HomePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <ProfilePage />
           </RequireAuth>
         }
       />

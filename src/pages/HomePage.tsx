@@ -68,8 +68,11 @@ function HomePage() {
   const [isHotCommentsEnabled, setIsHotCommentsEnabled] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const wasDataReadyRef = useRef(false);
   const isHotCommentEffectInitializedRef = useRef(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const isDataReady =
     Boolean(channelVideosState.channelMetadata) &&
     !channelVideosState.isLoading &&
@@ -234,10 +237,57 @@ function HomePage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      const menu = accountMenuRef.current;
+      const button = accountMenuButtonRef.current;
+      if (!menu || menu.contains(target)) return;
+      if (button && button.contains(target)) return;
+      setIsAccountMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsAccountMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
+
+  useEffect(() => {
+    setIsAccountMenuOpen(false);
+  }, [location.pathname]);
+
   const handleLogout = useCallback(async () => {
+    setIsAccountMenuOpen(false);
     await logout();
     navigate("/", { replace: true });
   }, [logout, navigate]);
+
+  const handleAccountMenuToggle = () => {
+    setIsAccountMenuOpen((previous) => !previous);
+  };
+
+  const handleNavigateToProfile = () => {
+    setIsAccountMenuOpen(false);
+    navigate("/profile", {
+      state: {
+        from: location.pathname,
+        restoreSearchState: channelVideosState,
+        restoreHotComments: isHotCommentsEnabled,
+        restoreGlobalSearch: isGlobalSearchEnabled,
+      },
+    });
+  };
 
   const displayName =
     user?.name?.trim() ||
@@ -270,36 +320,80 @@ function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-14">
-      <div className="flex w-full max-w-7xl items-center justify-end gap-3">
-        <div className="flex items-center gap-3 rounded-full border border-border/60 bg-background/95 px-3 py-1.5 shadow-sm backdrop-blur">
-          <Avatar className="h-10 w-10">
-            {avatarUrl ? (
-              <AvatarImage src={avatarUrl} alt={displayName} />
-            ) : null}
-            <AvatarFallback className="text-xs font-medium">
-              {avatarFallback}
-            </AvatarFallback>
-          </Avatar>
-          <div className="hidden sm:flex flex-col">
-            <span className="text-sm font-medium text-foreground">
-              {displayName}
-            </span>
-            {primaryEmail && (
-              <span className="text-xs text-muted-foreground">
-                {primaryEmail}
-              </span>
-            )}
-          </div>
+      <div className="flex w-full max-w-7xl justify-end">
+        <div className="relative">
+          <Button
+            ref={accountMenuButtonRef}
+            type="button"
+            id="account-menu-button"
+            variant="ghost"
+            size="icon-lg"
+            onClick={handleAccountMenuToggle}
+            disabled={!user}
+            aria-haspopup="menu"
+            aria-expanded={isAccountMenuOpen}
+            aria-controls="account-menu"
+            className="rounded-full border border-border/60 bg-background/90 p-0 text-foreground shadow-sm transition-transform hover:scale-105 focus-visible:ring-2 focus-visible:ring-primary/50"
+          >
+            <Avatar className="h-9 w-9">
+              {avatarUrl ? (
+                <AvatarImage src={avatarUrl} alt={displayName} />
+              ) : null}
+              <AvatarFallback className="text-xs font-medium">
+                {avatarFallback}
+              </AvatarFallback>
+            </Avatar>
+          </Button>
+          {isAccountMenuOpen ? (
+            <div
+              ref={accountMenuRef}
+              id="account-menu"
+              role="menu"
+              aria-labelledby="account-menu-button"
+              className="absolute right-0 z-40 mt-2 w-64 rounded-lg border border-border/60 bg-card shadow-xl"
+            >
+              <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+                <Avatar className="h-12 w-12">
+                  {avatarUrl ? (
+                    <AvatarImage src={avatarUrl} alt={displayName} />
+                  ) : null}
+                  <AvatarFallback className="text-sm font-medium">
+                    {avatarFallback}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {displayName}
+                  </span>
+                  {primaryEmail && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {primaryEmail}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-col gap-1 px-2 py-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm"
+                  onClick={handleNavigateToProfile}
+                >
+                  个人信息
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="justify-start rounded-md px-3 py-2 text-sm text-destructive hover:text-destructive"
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                >
+                  {isLoggingOut ? "正在退出..." : "退出登录"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={handleLogout}
-          disabled={isLoggingOut}
-        >
-          {isLoggingOut ? "正在退出..." : "退出登录"}
-        </Button>
       </div>
       <div className="fixed left-1/2 top-2 z-30 -translate-x-1/2">
         <Button
