@@ -3,10 +3,30 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchCurrentUserProfile,
   updateCurrentUserProfile,
+  updateCurrentUserPassword,
+  type UpdateUserProfileInput,
   type UserProfile,
 } from "@/lib/user-api";
 import { ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import {
+  AlertCircleIcon,
+  ArrowLeftIcon,
+  CheckCircle2Icon,
+  LockIcon,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Field,
   FieldDescription,
@@ -22,11 +42,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
 
 type ProfileStatus =
@@ -34,6 +50,12 @@ type ProfileStatus =
   | { type: "loading" }
   | { type: "error"; message: string }
   | { type: "success"; message: string };
+
+type ProfileFormState = {
+  name: string;
+  email: string;
+  avatar: string;
+};
 
 function resolveAvatarUrl(profile: UserProfile | null | undefined): string {
   if (!profile) return "";
@@ -53,14 +75,23 @@ function resolveAvatarUrl(profile: UserProfile | null | undefined): string {
 }
 
 function ProfilePage() {
-  const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateUser, clearSession } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [formState, setFormState] = useState({
+  const [formState, setFormState] = useState<ProfileFormState>({
     name: user?.name ?? "",
+    email: user?.email ?? "",
     avatar: resolveAvatarUrl(user ?? null),
   });
   const [status, setStatus] = useState<ProfileStatus>({ type: "loading" });
   const [isSaving, setIsSaving] = useState(false);
+  const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+  const [passwordStatus, setPasswordStatus] = useState<
+    | { type: "idle" }
+    | { type: "loading" }
+    | { type: "error"; message: string }
+    | { type: "success"; message: string }
+  >({ type: "idle" });
 
   const baselineProfile = useMemo<UserProfile | null>(() => {
     if (profile) return profile;
@@ -68,14 +99,26 @@ function ProfilePage() {
   }, [profile, user]);
 
   const baselineName = baselineProfile?.name ?? "";
+  const baselineEmail = baselineProfile?.email ?? "";
   const baselineAvatar = resolveAvatarUrl(baselineProfile);
 
   const avatarFallback = useMemo(() => {
     const source =
-      baselineProfile?.name?.trim() ||
-      baselineProfile?.email?.trim() ||
-      "";
+      baselineProfile?.name?.trim() || baselineProfile?.email?.trim() || "";
     return source ? source.slice(0, 2).toUpperCase() : "?";
+  }, [baselineProfile]);
+
+  const isEmailPasswordUser = useMemo(() => {
+    if (!baselineProfile) return false;
+    const picture =
+      (baselineProfile as { picture?: string | null })?.picture ?? null;
+    const imageUrl =
+      (baselineProfile as { imageUrl?: string | null })?.imageUrl ?? null;
+    const googleAvatar =
+      (baselineProfile as { avatarUrl?: string | null })?.avatarUrl ?? null;
+    return ![picture, imageUrl, googleAvatar].some(
+      (value) => typeof value === "string" && value.trim().length > 0,
+    );
   }, [baselineProfile]);
 
   useEffect(() => {
@@ -88,6 +131,7 @@ function ProfilePage() {
         setProfile(data);
         setFormState({
           name: data.name ?? "",
+          email: data.email ?? "",
           avatar: resolveAvatarUrl(data),
         });
         setStatus({ type: "idle" });
@@ -127,6 +171,7 @@ function ProfilePage() {
     if (!profile) return;
     setFormState({
       name: profile.name ?? "",
+      email: profile.email ?? "",
       avatar: resolveAvatarUrl(profile),
     });
   }, [profile]);
@@ -142,12 +187,11 @@ function ProfilePage() {
     );
   };
 
-  const handleReset = () => {
-    setFormState({
-      name: baselineName,
-      avatar: baselineAvatar,
-    });
-    setStatus({ type: "idle" });
+  const handlePasswordDialogOpenChange = (open: boolean) => {
+    setIsPasswordDialogOpen(open);
+    if (!open) {
+      setPasswordStatus({ type: "idle" });
+    }
   };
 
   const hasChanges =
@@ -168,7 +212,7 @@ function ProfilePage() {
     setStatus({ type: "idle" });
 
     try {
-      const payload: Record<string, string | null> = {};
+      const payload: UpdateUserProfileInput = {};
 
       if (formState.name.trim() !== baselineName.trim()) {
         payload.name = formState.name.trim() || null;
@@ -191,8 +235,7 @@ function ProfilePage() {
         setStatus({
           type: "error",
           message:
-            error.message ||
-            "保存失败，请确认后台已实现用户信息更新接口。",
+            error.message || "保存失败，请确认后台已实现用户信息更新接口。",
         });
       } else if (error instanceof Error) {
         setStatus({ type: "error", message: error.message });
@@ -209,25 +252,106 @@ function ProfilePage() {
 
   const currentAvatarUrl = formState.avatar.trim() || baselineAvatar;
 
-  const infoRows: Array<{ label: string; value: string | boolean | null }> = [
-    { label: "用户 ID", value: baselineProfile?.id ?? "" },
-    { label: "邮箱", value: baselineProfile?.email ?? "" },
-    {
-      label: "邮箱是否验证",
-      value: baselineProfile?.emailVerified ? "已验证" : "未验证",
-    },
-  ];
-
   const isLoading = status.type === "loading" && !baselineProfile;
+
+  const handlePasswordSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (passwordStatus.type === "loading") return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const currentPassword = String(
+      formData.get("currentPassword") ?? "",
+    ).trim();
+    const password = String(formData.get("newPassword") ?? "").trim();
+    const confirmPassword = String(
+      formData.get("confirmPassword") ?? "",
+    ).trim();
+
+    if (!currentPassword || !password || !confirmPassword) {
+      setPasswordStatus({ type: "error", message: "请完整填写所有字段。" });
+      return;
+    }
+
+    if (password.length < 8) {
+      setPasswordStatus({
+        type: "error",
+        message: "新密码长度至少需要 8 个字符。",
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setPasswordStatus({
+        type: "error",
+        message: "两次输入的新密码不一致，请重新输入。",
+      });
+      return;
+    }
+
+    setPasswordStatus({ type: "loading" });
+
+    try {
+      const response = await updateCurrentUserPassword({
+        currentPassword,
+        password,
+      });
+
+      if (!response.success) {
+        setPasswordStatus({
+          type: "error",
+          message: "密码更新失败，请稍后再试。",
+        });
+        return;
+      }
+
+      setPasswordStatus({
+        type: "success",
+        message: "密码已更新，下次登录时请使用新密码。",
+      });
+      form.reset();
+      setIsPasswordDialogOpen(false);
+      clearSession();
+      navigate("/", { replace: true });
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setPasswordStatus({
+          type: "error",
+          message: error.message || "密码更新失败，请稍后再试。",
+        });
+      } else if (error instanceof Error) {
+        setPasswordStatus({ type: "error", message: error.message });
+      } else {
+        setPasswordStatus({
+          type: "error",
+          message: "密码更新失败，请稍后再试。",
+        });
+      }
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col items-center bg-muted/30 px-4 py-10">
       <Card className="w-full max-w-3xl bg-card/90 shadow-xl backdrop-blur">
         <CardHeader>
-          <CardTitle>个人信息</CardTitle>
-          <CardDescription>
-            查看并管理您的登录信息。如果需要修改额外字段，请联系管理员。
-          </CardDescription>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <CardTitle>个人信息</CardTitle>
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="mt-1 flex items-center gap-2 text-sm"
+              onClick={() => navigate(-1)}
+            >
+              <ArrowLeftIcon className="h-4 w-4" />
+              返回
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -253,6 +377,13 @@ function ProfilePage() {
                 </div>
               )}
 
+              {isEmailPasswordUser ? (
+                <div className="rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+                  您是通过邮箱注册的用户，因此此处不会显示任何 Google
+                  账号相关信息。
+                </div>
+              ) : null}
+
               <div className="flex flex-col gap-6 md:flex-row md:items-start">
                 <div className="flex flex-col items-center gap-3 md:w-56">
                   <Avatar className="h-24 w-24 border border-border/70 shadow-sm">
@@ -266,9 +397,131 @@ function ProfilePage() {
                   <p className="text-xs text-muted-foreground">
                     输入头像图片的 URL 地址后保存即可更新头像。
                   </p>
+                  <Dialog
+                    onOpenChange={handlePasswordDialogOpenChange}
+                    open={isPasswordDialogOpen}
+                  >
+                    <DialogTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="mt-2 flex items-center gap-2"
+                      >
+                        <LockIcon className="h-4 w-4" />
+                        修改密码
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>修改密码</DialogTitle>
+                        <DialogDescription>
+                          更新登录密码后，下次登录请使用新密码。
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form
+                        className="space-y-4"
+                        onSubmit={handlePasswordSubmit}
+                      >
+                        <FieldGroup>
+                          <Field>
+                            <FieldLabel htmlFor="currentPassword">
+                              当前密码
+                            </FieldLabel>
+                            <Input
+                              id="currentPassword"
+                              name="currentPassword"
+                              type="password"
+                              autoComplete="current-password"
+                              placeholder="请输入当前密码"
+                            />
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="newPassword">
+                              新密码
+                            </FieldLabel>
+                            <Input
+                              id="newPassword"
+                              name="newPassword"
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="请输入新密码"
+                            />
+                            <FieldDescription>
+                              密码不少于 8 个字符。
+                            </FieldDescription>
+                          </Field>
+                          <Field>
+                            <FieldLabel htmlFor="confirmPassword">
+                              确认新密码
+                            </FieldLabel>
+                            <Input
+                              id="confirmPassword"
+                              name="confirmPassword"
+                              type="password"
+                              autoComplete="new-password"
+                              placeholder="再次输入新密码"
+                            />
+                          </Field>
+                        </FieldGroup>
+
+                        {passwordStatus.type === "error" ? (
+                          <Alert variant="destructive">
+                            <AlertCircleIcon />
+                            {/* <AlertTitle>更新失败</AlertTitle> */}
+                            <AlertDescription>
+                              {passwordStatus.message}
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+                        {passwordStatus.type === "success" ? (
+                          <Alert>
+                            <CheckCircle2Icon />
+                            {/* <AlertTitle>更新成功</AlertTitle> */}
+                            <AlertDescription>
+                              {passwordStatus.message}
+                            </AlertDescription>
+                          </Alert>
+                        ) : null}
+
+                        <DialogFooter>
+                          <DialogClose asChild>
+                            <Button type="button" variant="outline">
+                              取消
+                            </Button>
+                          </DialogClose>
+                          <Button
+                            type="submit"
+                            disabled={passwordStatus.type === "loading"}
+                          >
+                            {passwordStatus.type === "loading"
+                              ? "保存中..."
+                              : "保存密码"}
+                          </Button>
+                        </DialogFooter>
+                      </form>
+                    </DialogContent>
+                  </Dialog>
                 </div>
                 <div className="flex-1">
                   <FieldGroup>
+                    <Field>
+                      <FieldLabel htmlFor="email">邮箱</FieldLabel>
+                      <Input
+                        id="email"
+                        name="email"
+                        type="email"
+                        placeholder="m@example.com"
+                        value={formState.email}
+                        readOnly
+                        aria-readonly="true"
+                        autoComplete="email"
+                        className="bg-muted/40 text-muted-foreground"
+                      />
+                      <FieldDescription>
+                        邮箱仅用于登录与通知，如需修改请联系管理员。
+                      </FieldDescription>
+                    </Field>
                     <Field>
                       <FieldLabel htmlFor="name">昵称</FieldLabel>
                       <Input
@@ -284,15 +537,15 @@ function ProfilePage() {
                       </FieldDescription>
                     </Field>
                     <Field>
-                  <FieldLabel htmlFor="avatar">头像链接</FieldLabel>
-                  <Input
-                    id="avatar"
-                    name="avatar"
-                    placeholder="https://example.com/avatar.png"
-                    value={formState.avatar}
-                    onChange={handleInputChange}
-                    disabled={isSaving}
-                  />
+                      <FieldLabel htmlFor="avatar">头像链接</FieldLabel>
+                      <Input
+                        id="avatar"
+                        name="avatar"
+                        placeholder="https://example.com/avatar.png"
+                        value={formState.avatar}
+                        onChange={handleInputChange}
+                        disabled={isSaving}
+                      />
                       <FieldDescription>
                         支持 PNG、JPG、SVG 等图片地址。留空则使用默认头像。
                       </FieldDescription>
@@ -301,28 +554,7 @@ function ProfilePage() {
                 </div>
               </div>
 
-              <div className="grid gap-3 rounded-lg border border-border/50 bg-background/60 p-4 md:grid-cols-2">
-                {infoRows.map((row) => (
-                  <div key={row.label} className="flex flex-col gap-1">
-                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                      {row.label}
-                    </span>
-                    <span className="truncate text-sm text-foreground">
-                      {String(row.value ?? "—")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
               <div className="flex flex-wrap items-center justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleReset}
-                  disabled={isSaving || !hasChanges}
-                >
-                  重置
-                </Button>
                 <Button type="submit" disabled={isSaving || !hasChanges}>
                   {isSaving ? "保存中..." : "保存修改"}
                 </Button>
@@ -331,7 +563,7 @@ function ProfilePage() {
           )}
         </CardContent>
         <CardFooter className="justify-end text-xs text-muted-foreground">
-          若需修改邮箱或其他登录方式，请联系管理员。
+          更新后的密码会立即生效，如遇问题请联系管理员。
         </CardFooter>
       </Card>
     </div>

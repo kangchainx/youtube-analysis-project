@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { UserAccountDropdown } from "@/components/user-account-dropdown";
 
 type ProfileNavigationState = Record<string, unknown> | null;
@@ -42,7 +42,13 @@ function AppLayout() {
   return (
     <AppLayoutContext.Provider value={contextValue}>
       <div className="min-h-screen bg-background text-foreground">
-        <header className="sticky top-0 z-40 flex h-14 items-center justify-end border-b bg-background/90 px-4 backdrop-blur">
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur">
+          <Link
+            to="/home"
+            className="text-sm font-semibold tracking-wide text-foreground transition-colors hover:text-primary"
+          >
+            Youtube Analysis
+          </Link>
           <UserAccountDropdown />
         </header>
         <main className="min-h-[calc(100vh-3.5rem)]">
@@ -54,4 +60,3 @@ function AppLayout() {
 }
 
 export default AppLayout;
-

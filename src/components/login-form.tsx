@@ -3,17 +3,22 @@ import { Button } from "@/components/ui/button";
 import {
   Field,
   FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLabel,
   FieldSeparator,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 
 type LoginFormProps = React.ComponentProps<"form"> & {
   error?: string | null;
   onGoogleLogin?: () => void;
   isGoogleLoginLoading?: boolean;
+  isPasswordLoginLoading?: boolean;
+  infoMessage?: string | null;
+  defaultEmail?: string;
 };
 
 function GoogleIcon() {
@@ -50,48 +55,71 @@ export function LoginForm({
   error,
   onGoogleLogin,
   isGoogleLoginLoading,
+  isPasswordLoginLoading,
+  infoMessage,
+  defaultEmail,
   ...props
 }: LoginFormProps) {
   return (
     <form className={cn("flex flex-col gap-6", className)} {...props}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">Login to your account</h1>
+          <h1 className="text-2xl font-bold">欢迎回来</h1>
           <p className="text-muted-foreground text-sm text-balance">
-            Enter your email below to login to your account
+            输入邮箱与密码登录，或使用其他方式继续。
           </p>
         </div>
-        {error && (
-          <Field>
-            <FieldError>{error}</FieldError>
-          </Field>
-        )}
+        {infoMessage ? (
+          <Alert>
+            <CheckCircle2Icon className="h-4 w-4 text-emerald-500" />
+            <AlertDescription>{infoMessage}</AlertDescription>
+          </Alert>
+        ) : null}
+        {error ? (
+          <Alert variant="destructive">
+            <AlertCircleIcon className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
         <Field>
-          <FieldLabel htmlFor="email">Email</FieldLabel>
+          <FieldLabel htmlFor="email">邮箱</FieldLabel>
           <Input
             id="email"
             name="email"
-            type="email"
             placeholder="m@example.com"
+            autoComplete="email"
+            defaultValue={defaultEmail}
             required
           />
         </Field>
         <Field>
           <div className="flex items-center">
-            <FieldLabel htmlFor="password">Password</FieldLabel>
-            <a
+            <FieldLabel htmlFor="password">密码</FieldLabel>
+            {/* <a
               href="#"
               className="ml-auto text-sm underline-offset-4 hover:underline"
             >
-              Forgot your password?
-            </a>
+              忘记密码？
+            </a> */}
           </div>
-          <Input id="password" name="password" type="password" required />
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+          />
         </Field>
         <Field>
-          <Button type="submit">Login</Button>
+          <Button
+            type="submit"
+            disabled={isPasswordLoginLoading}
+            aria-busy={isPasswordLoginLoading}
+          >
+            {isPasswordLoginLoading ? "正在登录..." : "登录"}
+          </Button>
         </Field>
-        <FieldSeparator>Or continue with</FieldSeparator>
+        <FieldSeparator>或使用其他方式</FieldSeparator>
         <Field>
           <Button
             variant="outline"
@@ -106,10 +134,13 @@ export function LoginForm({
             </span>
           </Button>
           <FieldDescription className="text-center">
-            Don&apos;t have an account?{" "}
-            <a href="#" className="underline underline-offset-4">
-              Sign up
-            </a>
+            还没有账号？{" "}
+            <Link
+              to="/register"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              立即注册
+            </Link>
           </FieldDescription>
         </Field>
       </FieldGroup>

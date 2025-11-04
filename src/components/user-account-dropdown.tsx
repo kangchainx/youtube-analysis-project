@@ -1,8 +1,4 @@
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +12,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useAppLayout } from "@/layouts/AppLayout";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useMemo } from "react";
+import { Bell, LogOut, User } from "lucide-react";
 
 function deriveAvatarUrl(
   user: ReturnType<typeof useAuth>["user"],
@@ -54,12 +51,20 @@ export function UserAccountDropdown() {
   const avatarUrl = useMemo(() => deriveAvatarUrl(user), [user]);
   const avatarFallback = useMemo(() => avatarFallbackFor(user), [user]);
 
+  const createProfileState = (section?: string): Record<string, unknown> => {
+    const baseState = profileNavigationState ?? {
+      from: location.pathname,
+    };
+    return section ? { ...baseState, section } : baseState;
+  };
+
   const handleProfileClick = () => {
-    const state =
-      profileNavigationState ??
-      ({
-        from: location.pathname,
-      } as Record<string, unknown>);
+    const state = createProfileState();
+    navigate("/profile", { state });
+  };
+
+  const handleNotificationsClick = () => {
+    const state = createProfileState("notifications");
     navigate("/profile", { state });
   };
 
@@ -88,7 +93,7 @@ export function UserAccountDropdown() {
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-50">
         <DropdownMenuLabel>
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
@@ -103,17 +108,17 @@ export function UserAccountDropdown() {
               <span className="truncate text-sm font-semibold">
                 {user?.name ?? user?.email ?? "已登录用户"}
               </span>
-              {user?.email ? (
-                <span className="truncate text-xs text-muted-foreground">
-                  {user.email}
-                </span>
-              ) : null}
             </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={handleProfileClick}>
-          个人信息
+        <DropdownMenuItem onSelect={handleProfileClick} className="gap-2">
+          <User className="h-4 w-4" />
+          <span>账户</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={handleNotificationsClick} className="gap-2">
+          <Bell className="h-4 w-4" />
+          <span>通知</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -123,8 +128,10 @@ export function UserAccountDropdown() {
             if (isLoggingOut) return;
             void handleLogout();
           }}
+          className="gap-2"
         >
-          {isLoggingOut ? "正在退出..." : "退出登录"}
+          <LogOut className="h-4 w-4" />
+          <span>{isLoggingOut ? "正在退出..." : "退出登录"}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

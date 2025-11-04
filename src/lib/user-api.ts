@@ -18,7 +18,9 @@ function normalizeUserProfile(data: unknown): UserProfile {
     id: (rawUser?.id as string) ?? "",
     email: (rawUser?.email as string) ?? "",
     name: (rawUser?.name as string | null | undefined) ?? null,
-    emailVerified: Boolean((rawUser as { emailVerified?: boolean })?.emailVerified),
+    emailVerified: Boolean(
+      (rawUser as { emailVerified?: boolean })?.emailVerified,
+    ),
     avatar: (rawUser?.avatar as string | null | undefined) ?? null,
     picture: (rawUser?.picture as string | null | undefined) ?? null,
     avatarUrl: (rawUser?.avatarUrl as string | null | undefined) ?? null,
@@ -34,7 +36,9 @@ export async function fetchCurrentUserProfile(): Promise<UserProfile> {
 
 export type UpdateUserProfileInput = {
   name?: string | null;
+  email?: string | null;
   avatar?: string | null;
+  password?: string;
 };
 
 export async function updateCurrentUserProfile(
@@ -49,4 +53,22 @@ export async function updateCurrentUserProfile(
   });
 
   return normalizeUserProfile(response);
+}
+
+export async function updateCurrentUserPassword(input: {
+  currentPassword: string;
+  password: string;
+}): Promise<{ success: boolean }> {
+  const response = await apiFetch<{ success?: boolean }>(
+    "/api/users/me/password",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(input),
+    },
+  );
+
+  return { success: Boolean(response?.success) };
 }

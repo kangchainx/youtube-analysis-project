@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 import HomePage from "./pages/HomePage";
 import DetailPage from "./pages/DetailPage";
 import AuthCallbackPage from "./pages/AuthCallbackPage";
@@ -11,6 +12,7 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route path="/auth/google/callback" element={<AuthCallbackPage />} />
       <Route
         element={
