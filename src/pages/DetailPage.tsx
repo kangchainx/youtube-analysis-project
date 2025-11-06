@@ -7,6 +7,7 @@ import type {
   VideoTableRow,
 } from "@/features/home/search-input";
 import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
+import { getYoutubeApiKey } from "@/lib/config";
 import {
   ArrowLeft,
   ArrowUp,
@@ -221,13 +222,14 @@ function DetailPage(): JSX.Element {
     const resolvedVideoId = videoId ?? "";
     if (!resolvedVideoId) return;
     const controller = new AbortController();
-    const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
-
     async function fetchDetails() {
       try {
         setIsLoading(true);
         setError(null);
         setCommentsLoading(true);
+
+        const apiKey = await getYoutubeApiKey();
+        if (controller.signal.aborted) return;
 
         const videoResponse = await videosList({
           params: {

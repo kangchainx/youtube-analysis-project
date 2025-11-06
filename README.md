@@ -1,5 +1,7 @@
 # YouTube 频道分析项目
 
+本仓库提供项目的前端实现，需与配套后端服务结合使用，后端代码仓库：https://github.com/kangchainx/youtube-analysis-backend
+
 ## 功能介绍
 
 - 支持按频道名称或 @handle 搜索，自动请求 YouTube Data API 获取频道元数据与视频列表
@@ -12,13 +14,12 @@
 
 <!-- TODO: 在此添加项目截图，例如使用 Markdown 图片语法或 HTML 标签 -->
 
-![alt text](./public/login.png)
-![alt text](./public/home.png)
-![alt text](./public/search_result_list.png)
-![alt text](./public/search_result_card.png)
-![alt text](./public/search_result_detail1.png)
-![alt text](./public/search_result_detail2.png)
-![alt text](./public/video_detail.png)
+![](./public/screenshot/login_page.png)
+![](./public/screenshot/home_page.png)
+![](./public/screenshot/search_result_table_page.png)
+![](./public/screenshot/search_result_card_page.png)
+![](./public/screenshot/search_result_detail_page.png)
+![](./public/screenshot/profile_page.png)
 
 ## 技术栈说明
 
@@ -45,7 +46,12 @@
 ### 环境准备
 
 - Node.js 18 或以上版本
-- 有效的 YouTube Data API v3 Key
+- 必须搭配后端服务（https://github.com/kangchainx/youtube-analysis-backend），前端将在运行时优先读取 `GET /api/config/youtube-api-key` 接口（返回 `{ "youtubeApiKey": "<你的 Key>" }`）
+- 备选方案：在项目根目录创建 `.env.local`（或 `.env`）文件并写入
+  ```bash
+  VITE_YOUTUBE_API_KEY=你的_API_Key
+  ```
+  该方式仅在后端接口不可用时作为兜底使用
 
 ### 本地运行
 
@@ -53,10 +59,7 @@
    ```bash
    npm install
    ```
-2. 配置环境变量，在项目根目录创建 `.env.local`（或 `.env`）文件并写入：
-   ```bash
-   VITE_YOUTUBE_API_KEY=你的_API_Key
-   ```
+2. 如使用后端接口，确保其已可通过默认地址 `http://localhost:5001`（或设置 `VITE_API_BASE_URL` 指向新地址）访问
 3. 启动开发服务器
    ```bash
    npm run dev
@@ -72,21 +75,78 @@ npm run preview
 
 ## Docker 部署
 
-- 构建镜像（将 `你的_API_Key` 替换为有效的 YouTube Data API Key）
+### 单独部署前端静态资源（单独部署可能无法使用完整功能，建议结合后端的一键部署（docker-compose））
+
+- 构建镜像（自行传入 `VITE_YOUTUBE_API_KEY`）：
   ```bash
-  docker build --build-arg VITE_YOUTUBE_API_KEY=你的_API_Key -t youtube-analysis:latest .
+  docker build \
+    --build-arg VITE_YOUTUBE_API_KEY=你的_API_Key \
+    -t youtube-analysis:latest .
   ```
-- 启动容器并映射到本机端口（此例中访问地址为 http://localhost:8080）
+- 启动容器并映射端口（默认访问地址 http://localhost:8080）：
   ```bash
   docker run -d --name youtube-analysis -p 8080:80 youtube-analysis:latest
   ```
-- 更新镜像时可先停止并移除旧容器
+- 更新镜像时可先停止并移除旧容器，然后重新构建、启动：
   ```bash
   docker stop youtube-analysis && docker rm youtube-analysis
   docker build --build-arg VITE_YOUTUBE_API_KEY=新的_API_Key -t youtube-analysis:latest .
   docker run -d --name youtube-analysis -p 8080:80 youtube-analysis:latest
   ```
-- 若需在构建阶段读取本地 `.env` 文件中的 Key，可配合 `--build-arg VITE_YOUTUBE_API_KEY=$(grep ...)` 或使用 CI/CD 密钥管理；镜像构建完成后即为纯静态资源，运行阶段无需额外环境变量。
+
+### 结合后端的一键部署（docker-compose）
+
+仓库已提供 `docker-compose.yml`，可同时启动前端与后端代理，解决本地跨域问题。
+
+1. **前置准备**
+   - 确保已完成后端镜像构建（在 [后端仓库](https://github.com/kangchainx/youtube-analysis-backend) 根目录执行）：
+     ```bash
+     docker build -t youtube-analysis-backend:latest .
+     ```
+   - 确认宿主机可访问后端依赖（PostgreSQL、Google OAuth 等），并在需要时调整 `docker-compose.yml` 中的环境变量。
+
+2. **启动服务**
+
+   ```bash
+   BACKEND_IMAGE=youtube-analysis-backend:latest docker-compose up --build
+   ```
+
+   - 若希望后台运行，追加 `-d` 即可：
+     ```bash
+     BACKEND_IMAGE=youtube-analysis-backend:latest docker-compose up --build -d
+     ```
+   - 停止并清理容器：
+     ```bash
+     docker-compose down
+     ```
+
+3. **访问应用**
+   - 浏览器访问 `http://localhost:8080`。
+   - 前端内部会将 `/api/*` 请求通过 Nginx 反向代理转发到后端容器，因此无需再配置额外的 CORS。
+
+4. **环境变量说明**
+   - `BACKEND_IMAGE`：后端镜像名（默认示例为 `youtube-analysis-backend:latest`）。
+   - 启动 `docker-compose` 前，请在当前 Shell 或 `.env` 文件中设置 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 与 `YOUTUBE_API_KEY`。这些值需要你在 [Google 开发者平台](https://console.cloud.google.com/) 创建 OAuth 2.0 Client 与 API Key 后自行获取，并与后端配置保持一致。
+     ```bash
+     export GOOGLE_CLIENT_ID=从 Google 开发者平台获取的 OAuth Client ID
+     export GOOGLE_CLIENT_SECRET=从 Google 开发者平台获取的 OAuth Client Secret
+     export YOUTUBE_API_KEY=从 Google 开发者平台获取的 YouTube Data API Key
+     ```
+   - `docker-compose.yml` 中已内置后端运行所需的全部环境变量，如需修改（例如数据库地址、OAuth 回调 URL）可直接在文件中调整。
+   - 构建前端镜像时仍可选地设置 `VITE_YOUTUBE_API_KEY`，命令示例：
+     ```bash
+     VITE_YOUTUBE_API_KEY=你的_API_Key \
+     BACKEND_IMAGE=youtube-analysis-backend:latest \
+       docker-compose up --build
+     ```
+   - 若需刷新前端镜像，可执行：
+     ```bash
+     docker build -t youtube-analysis-frontend:latest .
+     docker-compose down
+     BACKEND_IMAGE=youtube-analysis-backend:latest docker-compose up --build
+     ```
+
+> 提示：如需在生产环境部署，建议将 OAuth 密钥、数据库凭据等敏感信息改为使用安全的密钥管理方案（例如 Docker secrets 或云端参数服务），并为后端镜像配置独立的 `.env` 或环境注入流程。
 
 ## 🪪 许可证
 

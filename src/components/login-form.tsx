@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircleIcon, CheckCircle2Icon } from "lucide-react";
 
 type LoginFormProps = React.ComponentProps<"form"> & {
@@ -64,10 +64,16 @@ export function LoginForm({
     <form className={cn("flex flex-col gap-6", className)} {...props}>
       <FieldGroup>
         <div className="flex flex-col items-center gap-1 text-center">
-          <h1 className="text-2xl font-bold">欢迎回来</h1>
-          <p className="text-muted-foreground text-sm text-balance">
-            输入邮箱与密码登录，或使用其他方式继续。
-          </p>
+          <h1 className="text-2xl font-bold mb-2.5">欢迎回来</h1>
+          <FieldDescription className="text-center">
+            还没有账号？{" "}
+            <Link
+              to="/register"
+              className="font-medium text-primary underline-offset-4 hover:underline"
+            >
+              立即注册
+            </Link>
+          </FieldDescription>
         </div>
         {infoMessage ? (
           <Alert>
@@ -133,15 +139,6 @@ export function LoginForm({
               {isGoogleLoginLoading ? "Redirecting..." : "Continue with Google"}
             </span>
           </Button>
-          <FieldDescription className="text-center">
-            还没有账号？{" "}
-            <Link
-              to="/register"
-              className="font-medium text-primary underline-offset-4 hover:underline"
-            >
-              立即注册
-            </Link>
-          </FieldDescription>
         </Field>
       </FieldGroup>
     </form>

@@ -37,7 +37,6 @@ import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -99,7 +98,6 @@ function ProfilePage() {
   }, [profile, user]);
 
   const baselineName = baselineProfile?.name ?? "";
-  const baselineEmail = baselineProfile?.email ?? "";
   const baselineAvatar = resolveAvatarUrl(baselineProfile);
 
   const avatarFallback = useMemo(() => {

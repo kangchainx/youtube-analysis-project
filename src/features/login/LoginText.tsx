@@ -39,16 +39,23 @@ function LoginText() {
   }, []);
 
   return (
-    <div className="text-center">
+    <div className="relative text-center">
+      <div
+        aria-hidden="true"
+        className="select-none text-4xl font-extrabold tracking-tight text-balance opacity-0"
+      >
+        {textUp}
+        <br />
+        {textDown}
+      </div>
       <h1
         className={cn(
-          "scroll-m-20 text-4xl font-extrabold tracking-tight text-balance transition-opacity",
+          "absolute inset-0 flex flex-col items-center justify-center gap-1 text-4xl font-extrabold tracking-tight text-balance transition-opacity",
           isVisible ? "opacity-100" : "opacity-0",
         )}
       >
-        {displayTextUp}
-        <br />
-        {displayTextDown}
+        <span>{displayTextUp}</span>
+        <span>{displayTextDown}</span>
       </h1>
     </div>
   );

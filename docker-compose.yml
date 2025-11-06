@@ -1,0 +1,50 @@
+version: "3.9"
+
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: /api
+        VITE_YOUTUBE_API_KEY: ${VITE_YOUTUBE_API_KEY:-}
+    image: youtube-analysis-frontend:latest
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "8080:80"
+    volumes:
+      - ./docker/nginx.compose.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app-network
+
+  backend:
+    image: ${BACKEND_IMAGE:?Set BACKEND_IMAGE to the backend container image reference}
+    environment:
+      - PORT=5001
+      - CLIENT_ORIGIN=http://localhost:8080
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID to the Google OAuth client ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET to the Google OAuth client secret}
+      - GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
+      - GOOGLE_AUTH_SCOPES=openid,profile,email
+      - JWT_SECRET=replace-with-a-secure-random-string
+      - JWT_EXPIRES_IN=7d
+      - SESSION_COOKIE_NAME=ya_session
+      - SESSION_COOKIE_SECURE=false
+      - SESSION_COOKIE_SAMESITE=lax
+      - DB_HOST=host.docker.internal
+      - DB_PORT=5432
+      - DB_USER=yvapuser
+      - DB_PASSWORD=youtube
+      - DB_NAME=yvapp
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:?Set YOUTUBE_API_KEY to your YouTube Data API key}
+      - SPOTLIGHT_CHANNEL_HANDLES=NDWTB,xiao_lin_shuo,moyutogether,hellobailu,Leisadventure,WorldwithCK,anzhengming,MaxBookClub,laogao,达叔的财智日记
+      - ENABLE_FETCH_PROXY=true
+    expose:
+      - "5001"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

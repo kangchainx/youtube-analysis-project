@@ -6,6 +6,7 @@ import {
   playlistItemsList,
   videosList,
 } from "@/lib/youtube";
+import { getYoutubeApiKey } from "@/lib/config";
 import { Search } from "lucide-react";
 import {
   type ChangeEvent,
@@ -221,7 +222,6 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
         pushState();
 
-        const apiKey = import.meta.env.VITE_YOUTUBE_API_KEY;
         const parseCount = (count?: string) => {
           if (!count) return 0;
           const parsed = Number(count);
@@ -229,6 +229,9 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         };
 
         try {
+          const apiKey = await getYoutubeApiKey();
+          if (controller.signal.aborted) return;
+
           const channelResponse = await channelsList({
             params: {
               part: "id,contentDetails,snippet,statistics",
@@ -708,7 +711,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="搜索频道或Youtuber..."
+            placeholder="输入频道ID进行搜索"
             className="pl-9"
             value={value}
             onChange={handleChange}
