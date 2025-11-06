@@ -10,6 +10,10 @@
 - 视频列表按发布时间倒序排列，包含观看、点赞、收藏、评论等统计，并支持分页浏览
 - 通过骨架屏与空状态组件提供有反馈的加载体验，并在搜索面板中加入折叠与确认弹窗交互
 
+如果你喜欢这个项目或者它对你有帮助，请点亮一个 star，每一个 star 对我意义非凡。
+
+If you enjoy this project or find it helpful, please consider giving it a star; each one means a great deal to me.
+
 ## 功能截图
 
 <!-- TODO: 在此添加项目截图，例如使用 Markdown 图片语法或 HTML 标签 -->
