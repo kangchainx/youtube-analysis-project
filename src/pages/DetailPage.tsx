@@ -9,13 +9,13 @@ import type {
 import YouTubeEmbed from "@/components/video/youtube-embed";
 import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
 import { getYoutubeApiKey } from "@/lib/config";
+import { ArrowLeft, ExternalLink, MessageCircle, ThumbsUp } from "lucide-react";
+import { ArrowLineUp, Textbox } from "@phosphor-icons/react";
 import {
-  ArrowLeft,
-  ArrowUp,
-  ExternalLink,
-  MessageCircle,
-  ThumbsUp,
-} from "lucide-react";
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
@@ -218,6 +218,9 @@ function DetailPage(): JSX.Element {
   );
 
   const formatCount = (value: number) => numberFormatter.format(value);
+  const handleTranscriptionClick = () => {
+    // Placeholder for future transcription workflow.
+  };
 
   useEffect(() => {
     const resolvedVideoId = videoId ?? "";
@@ -404,23 +407,16 @@ function DetailPage(): JSX.Element {
     );
   }, [videoDetail]);
 
-  const youtubeWatchUrl = videoDetail
-    ? `https://www.youtube.com/watch?v=${videoDetail.id}`
-    : null;
-
   const handleBack = () => {
     const hasSearchState = Boolean(state?.searchState);
-    const hasHotCommentState =
-      typeof state?.hotCommentsEnabled === "boolean";
+    const hasHotCommentState = typeof state?.hotCommentsEnabled === "boolean";
     const hasGlobalSearchState =
       typeof state?.globalSearchEnabled === "boolean";
 
     if (hasSearchState || hasHotCommentState || hasGlobalSearchState) {
       navigate("/home", {
         state: {
-          ...(hasSearchState
-            ? { restoreSearchState: state?.searchState }
-            : {}),
+          ...(hasSearchState ? { restoreSearchState: state?.searchState } : {}),
           ...(hasHotCommentState
             ? { restoreHotComments: state?.hotCommentsEnabled }
             : {}),
@@ -459,49 +455,30 @@ function DetailPage(): JSX.Element {
 
     return (
       <div className="space-y-6 rounded-lg border bg-background p-6 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2">
-            <h1 className="text-2xl font-semibold leading-tight">
-              {videoDetail.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <span>{publishedAtDisplay}</span>
-              <Separator orientation="vertical" className="h-4" />
-              <span>时长: {durationDisplay}</span>
-              {videoDetail.tags.length > 0 ? (
-                <>
-                  <Separator orientation="vertical" className="h-4" />
-                  <div className="flex flex-wrap gap-2">
-                    {videoDetail.tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
-                      >
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </div>
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold leading-tight">
+            {videoDetail.title}
+          </h1>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            <span>{publishedAtDisplay}</span>
+            <Separator orientation="vertical" className="h-4" />
+            <span>时长: {durationDisplay}</span>
+            {videoDetail.tags.length > 0 ? (
+              <>
+                <Separator orientation="vertical" className="h-4" />
+                <div className="flex flex-wrap gap-2">
+                  {videoDetail.tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground"
+                    >
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </>
+            ) : null}
           </div>
-          {youtubeWatchUrl ? (
-            <UIButton
-              type="button"
-              variant="default"
-              asChild
-              className="w-full gap-2 lg:w-auto"
-            >
-              <a
-                href={youtubeWatchUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                在 YouTube 打开
-                <ExternalLink className="h-4 w-4" aria-hidden="true" />
-              </a>
-            </UIButton>
-          ) : null}
         </div>
 
         {videoDetail.id ? (
@@ -723,6 +700,54 @@ function DetailPage(): JSX.Element {
     );
   };
 
+  const renderActionRail = () => {
+    const actionButtonClasses =
+      "group size-10 rounded-2xl border border-border/60 bg-background text-muted-foreground shadow-md backdrop-blur transition-transform duration-200 hover:-translate-y-0.5 focus-visible:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/30";
+
+    return (
+      <div className="sticky top-1/2 hidden lg:flex lg:-translate-y-1/2 lg:transform lg:self-start lg:flex-col lg:gap-3">
+        {showScrollTop ? (
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <UIButton
+                type="button"
+                size="icon"
+                className={actionButtonClasses}
+                aria-label="回到顶部"
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                variant="plain"
+              >
+                <ArrowLineUp size={32} />
+              </UIButton>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">
+              回到顶部
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
+        <Tooltip delayDuration={200}>
+          <TooltipTrigger asChild>
+            <UIButton
+              type="button"
+              size="icon"
+              className={actionButtonClasses}
+              onClick={handleTranscriptionClick}
+              aria-label="转文字"
+              variant="plain"
+            >
+              <Textbox size={32} />
+            </UIButton>
+          </TooltipTrigger>
+          <TooltipContent side="right" align="center">
+            转文字
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  };
+
   if (!videoId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-6">
@@ -738,74 +763,64 @@ function DetailPage(): JSX.Element {
 
   return (
     <div className="bg-muted/20">
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-10 lg:px-0">
-        <div className="flex items-center gap-2">
-          <UIButton
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="gap-2 px-0 text-sm text-muted-foreground hover:text-foreground"
-            onClick={handleBack}
-          >
-            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-            返回
-          </UIButton>
-        </div>
-
-        {error ? (
-          <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
-            <p className="text-base text-muted-foreground">{error}</p>
-            <div className="flex flex-wrap justify-center gap-3">
-              <UIButton type="button" variant="outline" onClick={handleBack}>
-                返回上一页
-              </UIButton>
-              <UIButton
-                type="button"
-                onClick={() => {
-                  setRefreshCounter((previous) => previous + 1);
-                }}
-              >
-                重试
-              </UIButton>
-            </div>
-          </div>
-        ) : null}
-
-        {renderHero()}
-
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">关键指标</h2>
-          {renderMetrics()}
-        </section>
-
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">频道概览</h2>
-          {renderChannelSnapshot()}
-        </section>
-
-        <section className="space-y-4">
+      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-10 lg:flex-row lg:items-start lg:gap-4 lg:px-0">
+        <div className="flex flex-1 flex-col gap-6">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold">热门评论</h2>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {topComments.length}
-            </span>
+            <UIButton
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="gap-2 px-0 text-sm text-muted-foreground hover:text-foreground"
+              onClick={handleBack}
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              返回
+            </UIButton>
           </div>
-          {renderComments()}
-        </section>
+
+          {error ? (
+            <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
+              <p className="text-base text-muted-foreground">{error}</p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <UIButton type="button" variant="outline" onClick={handleBack}>
+                  返回上一页
+                </UIButton>
+                <UIButton
+                  type="button"
+                  onClick={() => {
+                    setRefreshCounter((previous) => previous + 1);
+                  }}
+                >
+                  重试
+                </UIButton>
+              </div>
+            </div>
+          ) : null}
+
+          {renderHero()}
+
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">关键指标</h2>
+            {renderMetrics()}
+          </section>
+
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">频道概览</h2>
+            {renderChannelSnapshot()}
+          </section>
+
+          <section className="space-y-4">
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold">热门评论</h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                {topComments.length}
+              </span>
+            </div>
+            {renderComments()}
+          </section>
+        </div>
+        {renderActionRail()}
       </div>
-      {showScrollTop ? (
-        <UIButton
-          type="button"
-          size="icon"
-          className="fixed bottom-6 right-6 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90"
-          onClick={() => {
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }}
-          aria-label="回到顶部"
-        >
-          <ArrowUp className="h-5 w-5" aria-hidden="true" />
-        </UIButton>
-      ) : null}
     </div>
   );
 }
