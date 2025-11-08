@@ -6,6 +6,7 @@ import type {
   ChannelVideosState,
   VideoTableRow,
 } from "@/features/home/search-input";
+import YouTubeEmbed from "@/components/video/youtube-embed";
 import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
 import { getYoutubeApiKey } from "@/lib/config";
 import {
@@ -503,7 +504,13 @@ function DetailPage(): JSX.Element {
           ) : null}
         </div>
 
-        {videoDetail.thumbnailUrl ? (
+        {videoDetail.id ? (
+          <YouTubeEmbed
+            videoId={videoDetail.id}
+            title={videoDetail.title}
+            posterUrl={videoDetail.thumbnailUrl}
+          />
+        ) : videoDetail.thumbnailUrl ? (
           <div className="overflow-hidden rounded-lg border">
             <img
               src={videoDetail.thumbnailUrl}
