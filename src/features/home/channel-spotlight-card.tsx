@@ -36,10 +36,47 @@ const ChannelSpotlightCard = ({
     };
   }, []);
 
+  const copyWithFallback = (text: string) => {
+    if (
+      typeof navigator !== "undefined" &&
+      navigator.clipboard &&
+      navigator.clipboard.writeText
+    ) {
+      return navigator.clipboard.writeText(text);
+    }
+
+    // Clipboard API is unavailable (e.g. non-secure context), fallback to execCommand.
+    return new Promise<void>((resolve, reject) => {
+      try {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textarea);
+
+        if (successful) {
+          resolve();
+        } else {
+          reject(new Error("Fallback copy command was unsuccessful"));
+        }
+      } catch (error) {
+        reject(
+          error instanceof Error
+            ? error
+            : new Error("Unknown error during fallback copy"),
+        );
+      }
+    });
+  };
+
   const handleCopy = () => {
     if (!spotlight.handle) return;
-    void navigator.clipboard
-      .writeText(spotlight.handle)
+    void copyWithFallback(spotlight.handle)
       .then(() => {
         setIsCopied(true);
         if (copyResetTimeoutRef.current) {
