@@ -700,27 +700,47 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
     const showSuggestions =
       isGlobalSearchEnabled && isOpen && suggestions.length > 0;
+    const canSubmit = value.trim().length > 0;
 
     return (
       <div className="flex w-full max-w-5xl flex-col items-center gap-6">
         <form
           ref={containerRef}
           onSubmit={handleSubmit}
-          className="relative w-full max-w-md"
+          className="group relative w-full max-w-md"
         >
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="输入频道ID进行搜索"
-            className="pl-9"
-            value={value}
-            onChange={handleChange}
-            onFocus={() => {
-              if (isGlobalSearchEnabled && suggestions.length > 0) {
-                setIsOpen(true);
-              }
-            }}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-primary/30 via-white/20 to-primary/30 opacity-0 blur-[18px] transition-opacity duration-300 group-focus-within:opacity-100"
           />
+          <div className="flex items-center overflow-hidden rounded-full border border-white/20 bg-white/80 backdrop-blur-md shadow-[0_15px_40px_-20px_rgba(15,23,42,0.75)] transition-all duration-300 focus-within:border-white/70 focus-within:bg-white/90 focus-within:shadow-[0_25px_65px_-25px_rgba(15,23,42,0.85)] focus-within:ring-2 focus-within:ring-white/40">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="输入频道ID进行搜索"
+                className="h-12 rounded-none border-0 bg-transparent pl-11 pr-4 text-base shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                value={value}
+                onChange={handleChange}
+                onFocus={() => {
+                  if (isGlobalSearchEnabled && suggestions.length > 0) {
+                    setIsOpen(true);
+                  }
+                }}
+              />
+            </div>
+            <button
+              type="submit"
+              aria-label="执行搜索"
+              disabled={!canSubmit}
+              className="group flex h-12 w-16 items-center justify-center border-l border-white/30 bg-white/50 text-slate-900 backdrop-blur-md transition-all duration-200 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Search
+                className="h-5 w-5 text-slate-900 transition-transform duration-150 group-hover:scale-110 group-hover:text-primary"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
           {showSuggestions ? (
             <ul className="absolute left-0 right-0 top-full z-10 mt-2 overflow-hidden rounded-lg border bg-background shadow-lg">
               {suggestions.map((suggestion) => (
