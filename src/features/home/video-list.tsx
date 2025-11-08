@@ -52,6 +52,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 const PAGE_SIZE = 10;
+const VIEW_MODE_STORAGE_KEY = "video-list:view-mode";
+
+const getInitialViewMode = (): "table" | "card" => {
+  if (typeof window === "undefined") return "table";
+  try {
+    const storedValue = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    return storedValue === "card" ? "card" : "table";
+  } catch {
+    return "table";
+  }
+};
 
 interface VideoListProps {
   channelVideosState: ChannelVideosState;
@@ -70,7 +81,18 @@ function VideoList({
     channelVideosState;
 
   const [currentPage, setCurrentPage] = useState(1);
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  const [viewMode, setViewMode] = useState<"table" | "card">(
+    getInitialViewMode,
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      // Ignore storage errors (e.g. private mode) and keep state in memory.
+    }
+  }, [viewMode]);
 
   const numberFormatter = useMemo(
     () => new Intl.NumberFormat(undefined, { notation: "standard" }),

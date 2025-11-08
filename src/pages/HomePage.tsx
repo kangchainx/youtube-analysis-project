@@ -224,7 +224,7 @@ function HomePage() {
       return;
     }
 
-    searchInputRef.current?.submitCurrentQuery();
+    searchInputRef.current?.refresh();
   }, [isHotCommentsEnabled]);
 
   const handleSearchPanelToggle = () => {
