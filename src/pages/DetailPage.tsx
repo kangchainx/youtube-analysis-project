@@ -16,9 +16,31 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { JSX } from "react";
+import type { FormEvent, JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
+import { Spinner } from "@/components/ui/spinner";
+import { toast } from "sonner";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import type { ExportFormat } from "@/lib/video-transcription-api";
 
 const UIButton = ButtonPrimitive.Button;
 
@@ -128,6 +150,33 @@ type ChannelsListItem = {
 const MAX_COMMENT_COUNT = 6;
 const MAX_TAG_COUNT = 8;
 
+const TRANSCRIPTION_EXPORT_FORMATS: Array<{
+  value: ExportFormat;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "txt",
+    label: "TXT 文本",
+    description: "通用纯文本格式，方便再次编辑或复制。",
+  },
+  {
+    value: "markdown",
+    label: "Markdown",
+    description: "带有基础排版结构，适合文档分享。",
+  },
+  {
+    value: "docx",
+    label: "Word 文档",
+    description: "可直接在 Office/Docs 中打开修改。",
+  },
+  {
+    value: "pdf",
+    label: "PDF",
+    description: "只读格式，便于直接分发。",
+  },
+];
+
 function safeParseCount(value?: string | number) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (!value) return 0;
@@ -202,6 +251,15 @@ function DetailPage(): JSX.Element {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isCreatingTranscription, setIsCreatingTranscription] = useState(false);
+  const [isTranscriptionDialogOpen, setIsTranscriptionDialogOpen] =
+    useState(false);
+  const [selectedExportFormat, setSelectedExportFormat] =
+    useState<ExportFormat>("txt");
+  const [includeTimestamps, setIncludeTimestamps] = useState(false);
+  const [includeHeader, setIncludeHeader] = useState(false);
+
+  const { createTask: enqueueTranscriptionTask } = useTranscriptionTasks();
 
   const numberFormatter = useMemo(
     () => new Intl.NumberFormat(undefined, { notation: "standard" }),
@@ -218,8 +276,74 @@ function DetailPage(): JSX.Element {
   );
 
   const formatCount = (value: number) => numberFormatter.format(value);
+
+  const resetTranscriptionForm = () => {
+    setSelectedExportFormat("txt");
+    setIncludeTimestamps(false);
+    setIncludeHeader(false);
+  };
+
+  const handleTranscriptionDialogOpenChange = (open: boolean) => {
+    if (!open && isCreatingTranscription) {
+      return;
+    }
+    setIsTranscriptionDialogOpen(open);
+    if (!open) {
+      resetTranscriptionForm();
+    }
+  };
+
   const handleTranscriptionClick = () => {
-    // Placeholder for future transcription workflow.
+    if (!videoDetail?.id) {
+      toast.error("创建任务失败", {
+        description: "无法获取视频标识，请稍后再试。",
+      });
+      return;
+    }
+    setIsTranscriptionDialogOpen(true);
+  };
+
+  const handleTranscriptionConfirm = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (!videoDetail?.id) {
+      toast.error("创建任务失败", {
+        description: "无法获取视频标识，请稍后再试。",
+      });
+      return;
+    }
+
+    const videoUrl = `https://www.youtube.com/watch?v=${videoDetail.id}`;
+    setIsCreatingTranscription(true);
+
+    try {
+      await enqueueTranscriptionTask({
+        url: videoUrl,
+        title: videoDetail.title,
+        exportFormat: selectedExportFormat,
+        includeTimestamps,
+        includeHeader,
+      });
+      toast.success("任务已添加至任务中心", {
+        description: (
+          <Link
+            to="/workbench/tasks"
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            点击前往查看进度
+          </Link>
+        ),
+      });
+      setIsTranscriptionDialogOpen(false);
+      resetTranscriptionForm();
+    } catch (error) {
+      toast.error("创建任务失败", {
+        description: error instanceof Error ? error.message : "请稍后重试。",
+      });
+    } finally {
+      setIsCreatingTranscription(false);
+    }
   };
 
   useEffect(() => {
@@ -703,6 +827,9 @@ function DetailPage(): JSX.Element {
   const renderActionRail = () => {
     const actionButtonClasses =
       "group size-10 rounded-2xl border border-border/60 bg-background text-muted-foreground shadow-md backdrop-blur transition-transform duration-200 hover:-translate-y-0.5 focus-visible:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary/30";
+    const transcriptionButtonClasses = `${actionButtonClasses} ${
+      isCreatingTranscription ? "border-primary/60 text-primary" : ""
+    }`;
 
     return (
       <div className="sticky top-1/2 hidden lg:flex lg:-translate-y-1/2 lg:transform lg:self-start lg:flex-col lg:gap-3">
@@ -732,12 +859,17 @@ function DetailPage(): JSX.Element {
             <UIButton
               type="button"
               size="icon"
-              className={actionButtonClasses}
+              className={transcriptionButtonClasses}
               onClick={handleTranscriptionClick}
               aria-label="转文字"
               variant="plain"
+              aria-busy={isCreatingTranscription}
             >
-              <Textbox size={32} />
+              {isCreatingTranscription ? (
+                <Spinner className="h-5 w-5 text-primary" />
+              ) : (
+                <Textbox size={32} />
+              )}
             </UIButton>
           </TooltipTrigger>
           <TooltipContent side="right" align="center">
@@ -762,66 +894,176 @@ function DetailPage(): JSX.Element {
   }
 
   return (
-    <div className="bg-muted/20">
-      <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-10 lg:flex-row lg:items-start lg:gap-4 lg:px-0">
-        <div className="flex flex-1 flex-col gap-6">
-          <div className="flex items-center gap-2">
-            <UIButton
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="gap-2 px-0 text-sm text-muted-foreground hover:text-foreground"
-              onClick={handleBack}
-            >
-              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-              返回
-            </UIButton>
-          </div>
+    <>
+      <div className="bg-muted/20">
+        <div className="mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-6 px-4 py-10 lg:flex-row lg:items-start lg:gap-4 lg:px-0">
+          <div className="flex flex-1 flex-col gap-6">
+            <div className="flex items-center gap-2">
+              <UIButton
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-2 px-0 text-sm text-muted-foreground hover:text-foreground"
+                onClick={handleBack}
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                返回
+              </UIButton>
+            </div>
 
-          {error ? (
-            <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
-              <p className="text-base text-muted-foreground">{error}</p>
-              <div className="flex flex-wrap justify-center gap-3">
-                <UIButton type="button" variant="outline" onClick={handleBack}>
-                  返回上一页
-                </UIButton>
-                <UIButton
-                  type="button"
-                  onClick={() => {
-                    setRefreshCounter((previous) => previous + 1);
-                  }}
+            {error ? (
+              <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
+                <p className="text-base text-muted-foreground">{error}</p>
+                <div className="flex flex-wrap justify-center gap-3">
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    onClick={handleBack}
+                  >
+                    返回上一页
+                  </UIButton>
+                  <UIButton
+                    type="button"
+                    onClick={() => {
+                      setRefreshCounter((previous) => previous + 1);
+                    }}
+                  >
+                    重试
+                  </UIButton>
+                </div>
+              </div>
+            ) : null}
+
+            {renderHero()}
+
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">关键指标</h2>
+              {renderMetrics()}
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="text-lg font-semibold">频道概览</h2>
+              {renderChannelSnapshot()}
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-semibold">热门评论</h2>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {topComments.length}
+                </span>
+              </div>
+              {renderComments()}
+            </section>
+          </div>
+          {renderActionRail()}
+        </div>
+      </div>
+
+      <Dialog
+        open={isTranscriptionDialogOpen}
+        onOpenChange={handleTranscriptionDialogOpenChange}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>转文字</DialogTitle>
+            <DialogDescription>
+              选择导出格式及选项，确认后自动创建转文字任务。
+            </DialogDescription>
+          </DialogHeader>
+
+          <form className="space-y-6" onSubmit={handleTranscriptionConfirm}>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="export-format">导出格式</Label>
+                <Select
+                  value={selectedExportFormat}
+                  onValueChange={(value) =>
+                    setSelectedExportFormat(value as ExportFormat)
+                  }
+                  disabled={isCreatingTranscription}
                 >
-                  重试
-                </UIButton>
+                  <SelectTrigger
+                    id="export-format"
+                    className="custom-select-trigger flex h-12 w-full items-center text-left text-base"
+                  >
+                    <SelectValue placeholder="请选择导出格式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        textValue={option.label}
+                      >
+                        <div className="flex flex-col">
+                          <span>{option.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {option.description}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <div className="space-y-1">
+                  <Label htmlFor="include-timestamps">包含时间戳</Label>
+                  <p className="text-xs text-muted-foreground">
+                    在每段文本前保留字幕时间码，便于定位。
+                  </p>
+                </div>
+                <Switch
+                  id="include-timestamps"
+                  checked={includeTimestamps}
+                  onCheckedChange={setIncludeTimestamps}
+                  disabled={isCreatingTranscription}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                <div className="space-y-1">
+                  <Label htmlFor="include-header">包含头部信息</Label>
+                  <p className="text-xs text-muted-foreground">
+                    在开头附上视频标题、链接等元信息。
+                  </p>
+                </div>
+                <Switch
+                  id="include-header"
+                  checked={includeHeader}
+                  onCheckedChange={setIncludeHeader}
+                  disabled={isCreatingTranscription}
+                />
               </div>
             </div>
-          ) : null}
 
-          {renderHero()}
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">关键指标</h2>
-            {renderMetrics()}
-          </section>
-
-          <section className="space-y-4">
-            <h2 className="text-lg font-semibold">频道概览</h2>
-            {renderChannelSnapshot()}
-          </section>
-
-          <section className="space-y-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-semibold">热门评论</h2>
-              <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                {topComments.length}
-              </span>
-            </div>
-            {renderComments()}
-          </section>
-        </div>
-        {renderActionRail()}
-      </div>
-    </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <UIButton
+                  type="button"
+                  variant="outline"
+                  disabled={isCreatingTranscription}
+                >
+                  取消
+                </UIButton>
+              </DialogClose>
+              <UIButton
+                type="submit"
+                disabled={isCreatingTranscription}
+                className="min-w-[120px]"
+              >
+                {isCreatingTranscription ? (
+                  <Spinner className="h-4 w-4 text-primary-foreground" />
+                ) : (
+                  "开始转文字"
+                )}
+              </UIButton>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
