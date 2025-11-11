@@ -275,7 +275,7 @@ function HomePage() {
   }, [profileNavigationPayload, setProfileNavigationState]);
 
   const searchPanelClasses = cn(
-    "mt-3 transition-all duration-300 ease-in-out",
+    "mt-10 transition-all duration-300 ease-in-out",
     isSearchCollapsed
       ? "-translate-y-4 max-h-0 overflow-hidden opacity-0 pointer-events-none"
       : "max-h-[420px] overflow-visible opacity-100 translate-y-0",
@@ -312,24 +312,26 @@ function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-16 md:pt-20">
-      <div className="fixed left-1/2 top-16 z-30 -translate-x-1/2 md:top-20">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          onClick={handleSearchPanelToggle}
-          aria-expanded={!isSearchCollapsed}
-          aria-controls="search-panel"
-          aria-label={isSearchCollapsed ? "展开搜索区域" : "收起搜索区域"}
-          title={isSearchCollapsed ? "展开搜索区域" : "收起搜索区域"}
-          className="rounded-full border border-border/70 bg-background shadow-sm"
-        >
-          {isSearchCollapsed ? (
-            <ChevronDown className="h-4 w-4" />
-          ) : (
-            <ChevronUp className="h-4 w-4" />
-          )}
-        </Button>
+      <div className="w-full max-w-7xl">
+        <div className="relative flex justify-center">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={handleSearchPanelToggle}
+            aria-expanded={!isSearchCollapsed}
+            aria-controls="search-panel"
+            aria-label={isSearchCollapsed ? "展开搜索区域" : "收起搜索区域"}
+            title={isSearchCollapsed ? "展开搜索区域" : "收起搜索区域"}
+            className="absolute -top-6 left-1/2 z-30 -translate-x-1/2 rounded-full border border-border/70 bg-background shadow-sm"
+          >
+            {isSearchCollapsed ? (
+              <ChevronDown className="h-4 w-4" />
+            ) : (
+              <ChevronUp className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
       </div>
       <div className="w-full max-w-7xl">
         <div id="search-panel" className={searchPanelClasses}>

@@ -119,6 +119,16 @@
   }
 }
 
+@layer components {
+  .custom-select-trigger {
+    @apply rounded-lg border border-gray-300 px-4;
+  }
+
+  .custom-select-trigger[data-size="default"] {
+    height: 3rem !important;
+  }
+}
+
 @keyframes testimonials-marquee {
   0% {
     transform: translateX(0);

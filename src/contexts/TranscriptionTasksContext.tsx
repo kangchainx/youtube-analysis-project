@@ -2,14 +2,12 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 import {
   createTranscriptionTask,
-  getTaskDetails,
   getTaskStatus,
   type CreateTranscriptionTaskRequest,
   type TaskDetailFile,
@@ -51,9 +49,6 @@ const TranscriptionTasksContext = createContext<
   TranscriptionTasksContextValue | undefined
 >(undefined);
 
-const FINAL_STATUSES = new Set<TaskStatus | string>(["completed", "failed"]);
-const POLL_INTERVAL_MS = 5000;
-const DETAILS_POLL_INTERVAL_MS = 5000;
 
 const normalizeProgress = (value?: number | null) => {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -205,100 +200,6 @@ export function TranscriptionTasksProvider({
     },
     [refreshTask],
   );
-
-  const activeTaskIds = useMemo(
-    () =>
-      Object.values(tasksMap)
-        .filter((task) => !FINAL_STATUSES.has(task.status))
-        .map((task) => task.id),
-    [tasksMap],
-  );
-
-  const tasksAwaitingFiles = useMemo(
-    () =>
-      Object.values(tasksMap).filter(
-        (task) =>
-          task.status === "completed" &&
-          task.vttId &&
-          (task.files?.length ?? 0) === 0,
-      ),
-    [tasksMap],
-  );
-
-  const tasksAwaitingFilesSignature = tasksAwaitingFiles
-    .map((task) => `${task.id}:${task.updatedAt}`)
-    .join("|");
-
-  useEffect(() => {
-    if (activeTaskIds.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const poll = async () => {
-      await Promise.allSettled(
-        activeTaskIds.map(async (taskId) => {
-          if (cancelled) return;
-          await refreshTask(taskId);
-        }),
-      );
-    };
-
-    void poll();
-    const intervalId = window.setInterval(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [activeTaskIds.join("|"), refreshTask]);
-
-  useEffect(() => {
-    if (tasksAwaitingFiles.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const fetchDetails = async () => {
-      await Promise.allSettled(
-        tasksAwaitingFiles.map(async (task) => {
-          if (cancelled || !task.vttId) return;
-          try {
-            const files = await getTaskDetails(task.vttId);
-            if (cancelled || files.length === 0) {
-              return;
-            }
-            upsertTask(task.id, (current) => {
-              if (!current) {
-                return {
-                  ...task,
-                  files,
-                  updatedAt: Date.now(),
-                };
-              }
-              return {
-                ...current,
-                files,
-                updatedAt: Date.now(),
-              };
-            });
-          } catch (error) {
-            console.error("Failed to fetch transcription files", error);
-          }
-        }),
-      );
-    };
-
-    void fetchDetails();
-    const intervalId = window.setInterval(fetchDetails, DETAILS_POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [tasksAwaitingFilesSignature, tasksAwaitingFiles, upsertTask]);
 
   const value = useMemo<TranscriptionTasksContextValue>(
     () => ({

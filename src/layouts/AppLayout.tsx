@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { AppHeader } from "@/components/app-header";
 import { TranscriptionTasksProvider } from "@/contexts/TranscriptionTasksContext";
 import { Toaster } from "@/components/ui/sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 type ProfileNavigationState = Record<string, unknown> | null;
 
@@ -25,6 +26,10 @@ export function useAppLayout(): AppLayoutContextValue {
 
 function AppLayout() {
   const location = useLocation();
+  const { user } = useAuth();
+  const mainMinHeightClass = user
+    ? "min-h-[calc(100vh-3.5rem)]"
+    : "min-h-screen";
   const [profileNavigationState, setProfileNavigationState] = useState<
     ProfileNavigationState
   >({ from: location.pathname });
@@ -45,8 +50,8 @@ function AppLayout() {
     <AppLayoutContext.Provider value={contextValue}>
       <TranscriptionTasksProvider>
         <div className="min-h-screen bg-background text-foreground">
-          <AppHeader />
-          <main className="min-h-[calc(100vh-3.5rem)]">
+          {user && <AppHeader />}
+          <main className={mainMinHeightClass}>
             <Outlet />
           </main>
           <Toaster richColors position="top-center" />

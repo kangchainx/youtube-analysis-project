@@ -16,8 +16,8 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { JSX } from "react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import type { FormEvent, JSX } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { Spinner } from "@/components/ui/spinner";
@@ -252,8 +252,10 @@ function DetailPage(): JSX.Element {
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isCreatingTranscription, setIsCreatingTranscription] = useState(false);
-  const [isTranscriptionDialogOpen, setIsTranscriptionDialogOpen] = useState(false);
-  const [selectedExportFormat, setSelectedExportFormat] = useState<ExportFormat>("txt");
+  const [isTranscriptionDialogOpen, setIsTranscriptionDialogOpen] =
+    useState(false);
+  const [selectedExportFormat, setSelectedExportFormat] =
+    useState<ExportFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [includeHeader, setIncludeHeader] = useState(false);
 
@@ -301,7 +303,9 @@ function DetailPage(): JSX.Element {
     setIsTranscriptionDialogOpen(true);
   };
 
-  const handleTranscriptionConfirm = async (event: FormEvent<HTMLFormElement>) => {
+  const handleTranscriptionConfirm = async (
+    event: FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     if (!videoDetail?.id) {
       toast.error("创建任务失败", {
@@ -335,8 +339,7 @@ function DetailPage(): JSX.Element {
       resetTranscriptionForm();
     } catch (error) {
       toast.error("创建任务失败", {
-        description:
-          error instanceof Error ? error.message : "请稍后重试。",
+        description: error instanceof Error ? error.message : "请稍后重试。",
       });
     } finally {
       setIsCreatingTranscription(false);
@@ -912,7 +915,11 @@ function DetailPage(): JSX.Element {
               <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
                 <p className="text-base text-muted-foreground">{error}</p>
                 <div className="flex flex-wrap justify-center gap-3">
-                  <UIButton type="button" variant="outline" onClick={handleBack}>
+                  <UIButton
+                    type="button"
+                    variant="outline"
+                    onClick={handleBack}
+                  >
                     返回上一页
                   </UIButton>
                   <UIButton
@@ -966,34 +973,41 @@ function DetailPage(): JSX.Element {
           </DialogHeader>
 
           <form className="space-y-6" onSubmit={handleTranscriptionConfirm}>
-            <div className="space-y-2">
-              <Label htmlFor="export-format">导出格式</Label>
-              <Select
-                value={selectedExportFormat}
-                onValueChange={(value) =>
-                  setSelectedExportFormat(value as ExportFormat)
-                }
-                disabled={isCreatingTranscription}
-              >
-                <SelectTrigger id="export-format">
-                  <SelectValue placeholder="请选择导出格式" />
-                </SelectTrigger>
-                <SelectContent>
-                  {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      <div className="flex flex-col">
-                        <span>{option.label}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {option.description}
-                        </span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-3">
+              <div className="space-y-2">
+                <Label htmlFor="export-format">导出格式</Label>
+                <Select
+                  value={selectedExportFormat}
+                  onValueChange={(value) =>
+                    setSelectedExportFormat(value as ExportFormat)
+                  }
+                  disabled={isCreatingTranscription}
+                >
+                  <SelectTrigger
+                    id="export-format"
+                    className="custom-select-trigger flex h-12 w-full items-center text-left text-base"
+                  >
+                    <SelectValue placeholder="请选择导出格式" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
+                      <SelectItem
+                        key={option.value}
+                        value={option.value}
+                        textValue={option.label}
+                      >
+                        <div className="flex flex-col">
+                          <span>{option.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {option.description}
+                          </span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                 <div className="space-y-1">
                   <Label htmlFor="include-timestamps">包含时间戳</Label>
