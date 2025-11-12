@@ -12,6 +12,7 @@ import DashboardPage from "@/pages/workbench/Dashboard";
 import SubscriptionsPage from "@/pages/workbench/Subscriptions";
 import AnalyticsPage from "@/pages/workbench/Analytics";
 import TasksPage from "@/pages/workbench/Tasks";
+import NotificationsPage from "@/pages/workbench/Notifications";
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
             <Route path="subscriptions" element={<SubscriptionsPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="tasks" element={<TasksPage />} />
+            <Route path="notifications" element={<NotificationsPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

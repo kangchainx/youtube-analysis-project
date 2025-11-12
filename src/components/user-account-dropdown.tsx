@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/contexts/NotificationsContext";
 import { useAppLayout } from "@/layouts/AppLayout";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useMemo } from "react";
@@ -47,9 +48,11 @@ export function UserAccountDropdown() {
   const location = useLocation();
   const { user, logout, isLoggingOut } = useAuth();
   const { profileNavigationState, setProfileNavigationState } = useAppLayout();
+  const { unreadCount } = useNotifications();
 
   const avatarUrl = useMemo(() => deriveAvatarUrl(user), [user]);
   const avatarFallback = useMemo(() => avatarFallbackFor(user), [user]);
+  const unreadBadgeLabel = unreadCount > 99 ? "99+" : unreadCount;
 
   const createProfileState = (section?: string): Record<string, unknown> => {
     const baseState = profileNavigationState ?? {
@@ -64,8 +67,7 @@ export function UserAccountDropdown() {
   };
 
   const handleNotificationsClick = () => {
-    const state = createProfileState("notifications");
-    navigate("/profile", { state });
+    navigate("/workbench/notifications");
   };
 
   const handleLogout = async () => {
@@ -116,9 +118,17 @@ export function UserAccountDropdown() {
           <User className="h-4 w-4" />
           <span>账户</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={handleNotificationsClick} className="gap-2">
+        <DropdownMenuItem
+          onSelect={handleNotificationsClick}
+          className="gap-2"
+        >
           <Bell className="h-4 w-4" />
-          <span>通知</span>
+          <span className="flex-1">通知</span>
+          {unreadCount > 0 && (
+            <span className="rounded-full bg-destructive px-1.5 text-[11px] font-semibold leading-4 text-white">
+              {unreadBadgeLabel}
+            </span>
+          )}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

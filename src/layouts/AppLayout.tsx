@@ -4,6 +4,7 @@ import { AppHeader } from "@/components/app-header";
 import { TranscriptionTasksProvider } from "@/contexts/TranscriptionTasksContext";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 
 type ProfileNavigationState = Record<string, unknown> | null;
 
@@ -49,13 +50,15 @@ function AppLayout() {
   return (
     <AppLayoutContext.Provider value={contextValue}>
       <TranscriptionTasksProvider>
-        <div className="min-h-screen bg-background text-foreground">
-          {user && <AppHeader />}
-          <main className={mainMinHeightClass}>
-            <Outlet />
-          </main>
-          <Toaster richColors position="top-center" />
-        </div>
+        <NotificationsProvider>
+          <div className="min-h-screen bg-background text-foreground">
+            {user && <AppHeader />}
+            <main className={mainMinHeightClass}>
+              <Outlet />
+            </main>
+            <Toaster richColors position="top-center" />
+          </div>
+        </NotificationsProvider>
       </TranscriptionTasksProvider>
     </AppLayoutContext.Provider>
   );
