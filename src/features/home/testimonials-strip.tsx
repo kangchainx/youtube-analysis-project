@@ -128,7 +128,7 @@ const TestimonialsStrip = () => {
   const showEmptyState = !isLoading && spotlightChannels.length === 0;
 
   return (
-    <div className="mt-12 flex flex-col items-center gap-4">
+    <div className="mt-6 flex flex-col items-center gap-4">
       <TypographyH2 className="text-center text-2xl font-semibold text-foreground md:text-3xl">
         想做自媒体？
       </TypographyH2>

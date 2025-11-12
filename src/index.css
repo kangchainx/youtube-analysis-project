@@ -127,6 +127,21 @@
   .custom-select-trigger[data-size="default"] {
     height: 3rem !important;
   }
+
+  .progress-message-container {
+    animation: progress-message-slide 0.5s ease-out both;
+  }
+
+  .progress-message-text {
+    animation: progress-message-blink 1.6s ease-in-out infinite;
+  }
+
+  .progress-message-text--scroll {
+    animation: progress-message-scroll 10s linear infinite,
+      progress-message-blink 1.6s ease-in-out infinite;
+    display: inline-flex;
+    min-width: 100%;
+  }
 }
 
 @keyframes testimonials-marquee {
@@ -135,5 +150,35 @@
   }
   100% {
     transform: translateX(-50%);
+  }
+}
+
+@keyframes progress-message-slide {
+  0% {
+    opacity: 0;
+    transform: translateY(60%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes progress-message-blink {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes progress-message-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-60%);
   }
 }

@@ -8,8 +8,40 @@ import {
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 
-const Toaster = ({ ...props }: ToasterProps) => {
+const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+
+  const baseToastOptions: ToasterProps["toastOptions"] = {
+    style: {
+      marginInline: "auto",
+    },
+    classNames: {
+      toast:
+        "mx-auto flex w-full max-w-[420px] items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm shadow-lg shadow-emerald-100/80 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
+      content:
+        "flex-1 text-sm leading-relaxed text-emerald-800 dark:text-emerald-100",
+      icon: "mt-0.5 shrink-0 text-emerald-500 dark:text-emerald-300",
+      closeButton:
+        "text-emerald-500 transition hover:text-emerald-600 dark:text-emerald-200 dark:hover:text-emerald-50",
+      actionButton:
+        "rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-100",
+      cancelButton:
+        "text-xs font-medium text-muted-foreground hover:text-foreground",
+    },
+  }
+
+  const mergedToastOptions: ToasterProps["toastOptions"] = {
+    ...baseToastOptions,
+    ...toastOptions,
+    classNames: {
+      ...baseToastOptions?.classNames,
+      ...toastOptions?.classNames,
+    },
+    style: {
+      ...baseToastOptions?.style,
+      ...toastOptions?.style,
+    },
+  }
 
   return (
     <Sonner
@@ -30,6 +62,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--border-radius": "var(--radius)",
         } as React.CSSProperties
       }
+      toastOptions={mergedToastOptions}
       {...props}
     />
   )

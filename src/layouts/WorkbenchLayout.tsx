@@ -11,7 +11,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Home, User, BarChart3, ClipboardList } from "lucide-react";
+import { Home, User, BarChart3, ClipboardList, Bell } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 type WorkbenchNavItem = {
@@ -45,6 +45,12 @@ const navItems: WorkbenchNavItem[] = [
     subtitle: "Task Center",
     href: "/workbench/tasks",
     icon: ClipboardList,
+  },
+  {
+    title: "通知中心",
+    subtitle: "Notifications",
+    href: "/workbench/notifications",
+    icon: Bell,
   },
 ];
 

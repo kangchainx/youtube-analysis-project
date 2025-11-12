@@ -14,7 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
   Pagination,
   PaginationContent,
@@ -29,6 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { DataErrorState } from "@/components/ui/data-error-state";
 import {
   fetchCompletedTasksWithDetails,
   fetchTranscriptionTasks,
@@ -46,11 +46,12 @@ import { FileText, RefreshCcw } from "lucide-react";
 
 const FINAL_STATUSES = new Set<TaskStatus>(["completed", "failed"]);
 const DEFAULT_PAGE_SIZE = 10;
+const TABLE_ROW_CLASS = "h-12";
 
 const TAB_CONFIG = {
   inProgress: {
     label: "进行中",
-    statuses: ["pending", "processing"],
+    statuses: ["processing"],
     emptyTitle: "暂无进行中的任务",
     emptyDescription: "创建新的转写任务即可在此查看实时进度。",
   },
@@ -83,6 +84,7 @@ type TaskListItem = {
   taskId: string;
   status: TaskStatus;
   progress: number | null;
+  progressMessage: string | null;
   errorMessage: string | null;
   createdAt: number;
   updatedAt: number;
@@ -154,11 +156,16 @@ const formatFileSize = (size?: number) => {
 };
 
 function mapTaskRecord(record: TaskListRecord): TaskListItem {
+  const progressMessage =
+    record.progressMessage ??
+    (record as { progress_message?: string | null }).progress_message ??
+    null;
   return {
     id: record.id ?? record.taskId,
     taskId: record.taskId ?? record.id,
     status: record.status,
     progress: normalizeProgress(record.progress),
+    progressMessage,
     errorMessage: record.errorMessage ?? null,
     createdAt: parseTimestamp(record.createdAt),
     updatedAt: parseTimestamp(record.updatedAt),
@@ -246,7 +253,9 @@ function TasksPage() {
     completed: createInitialTabState(),
     failed: createInitialTabState(),
   });
-  const [downloadingFileKey, setDownloadingFileKey] = useState<string | null>(null);
+  const [downloadingFileKey, setDownloadingFileKey] = useState<string | null>(
+    null,
+  );
   const tabStatesRef = useRef(tabStates);
   useEffect(() => {
     tabStatesRef.current = tabStates;
@@ -272,6 +281,7 @@ function TasksPage() {
           const response = await fetchCompletedTasksWithDetails({
             page: targetPage,
             pageSize: DEFAULT_PAGE_SIZE,
+            status: TAB_CONFIG[tabKey].statuses,
           });
 
           const normalizedItems = response.data.map((record) => ({
@@ -372,6 +382,14 @@ function TasksPage() {
       const updatedAt = parseTimestamp(
         "updatedAt" in payload ? payload.updatedAt : undefined,
       );
+      const rawProgressMessage =
+        ("progressMessage" in payload ? payload.progressMessage : undefined) ??
+        (payload as { progress_message?: string | null }).progress_message ??
+        null;
+      const progressMessage =
+        typeof rawProgressMessage === "string"
+          ? rawProgressMessage.trim() || null
+          : rawProgressMessage;
       const errorMessage =
         "errorMessage" in payload && payload.errorMessage
           ? payload.errorMessage
@@ -395,6 +413,10 @@ function TasksPage() {
           progress,
           updatedAt,
           errorMessage,
+          progressMessage:
+            progressMessage !== null
+              ? progressMessage
+              : nextItems[index].progressMessage,
         };
         if (FINAL_STATUSES.has(status)) {
           nextItems.splice(index, 1);
@@ -409,7 +431,6 @@ function TasksPage() {
           },
         };
       });
-
       if (FINAL_STATUSES.has(status)) {
         const cleanup = streamCleanupRef.current.get(payload.taskId);
         cleanup?.();
@@ -487,10 +508,13 @@ function TasksPage() {
           window.open(url, "_blank", "noopener,noreferrer");
         }
       } catch (error) {
-        const message = error instanceof Error ? error.message : "下载链接获取失败";
+        const message =
+          error instanceof Error ? error.message : "下载链接获取失败";
         toast.error(message);
       } finally {
-        setDownloadingFileKey((current) => (current === downloadKey ? null : current));
+        setDownloadingFileKey((current) =>
+          current === downloadKey ? null : current,
+        );
       }
     },
     [],
@@ -502,7 +526,7 @@ function TasksPage() {
     if (!totalPages || totalPages <= 1) return null;
     return (
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground whitespace-nowrap">
           第 {state.page} / {totalPages} 页 · 共 {state.meta?.total ?? 0} 个任务
         </p>
         <Pagination>
@@ -542,10 +566,12 @@ function TasksPage() {
   };
 
   const renderEmptyState = (tabKey: TaskTabKey) => (
-    <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
-      <FileText className="h-10 w-10 text-muted-foreground/70" />
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/80 px-6 py-12 text-center text-sm text-muted-foreground">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted/60 text-muted-foreground">
+        <FileText className="h-8 w-8" />
+      </div>
       <div>
-        <p className="font-medium text-foreground">
+        <p className="text-base font-medium text-foreground">
           {TAB_CONFIG[tabKey].emptyTitle}
         </p>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -555,16 +581,10 @@ function TasksPage() {
     </div>
   );
 
-  const renderErrorState = (tabKey: TaskTabKey, message: string) => (
-    <div className="flex flex-col items-center gap-3 py-12 text-center text-sm text-muted-foreground">
-      <p className="text-destructive">{message}</p>
-      <Button
-        size="sm"
-        onClick={() => fetchTabData(tabKey, tabStatesRef.current[tabKey].page)}
-      >
-        重试
-      </Button>
-    </div>
+  const renderErrorState = (tabKey: TaskTabKey) => (
+    <DataErrorState
+      onRetry={() => fetchTabData(tabKey, tabStatesRef.current[tabKey].page)}
+    />
   );
 
   const renderFileField = (
@@ -600,10 +620,10 @@ function TasksPage() {
 
   const renderInProgressTable = () => {
     const state = tabStates.inProgress;
-    if (state.error) return renderErrorState("inProgress", state.error);
+    if (state.error) return renderErrorState("inProgress");
     if (state.isLoading && state.items.length === 0) {
       return (
-        <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border/80 px-6 py-12 text-center text-sm text-muted-foreground">
           <Spinner className="h-6 w-6 text-foreground" />
           <p>正在加载任务...</p>
         </div>
@@ -615,24 +635,30 @@ function TasksPage() {
     return (
       <>
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/40 text-xs uppercase tracking-wide">
             <TableRow>
               <TableHead className="w-14 text-center">序号</TableHead>
               <TableHead className="w-[20%] text-center">视频链接</TableHead>
               <TableHead className="text-center">视频源</TableHead>
               <TableHead className="min-w-[220px] text-center">进度</TableHead>
               <TableHead className="text-center">创建时间</TableHead>
+              <TableHead className="text-center">更新时间</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {state.items.map((task, index) => {
               const progressLabel =
                 task.progress === null ? "处理中..." : `${task.progress}%`;
+              const progressMessageText =
+                task.progressMessage?.trim() || progressLabel;
               const displayVideoId =
                 extractVideoIdentifier(task.videoSourceUrl) ??
                 task.videoSourceUrl;
               return (
-                <TableRow key={`${task.id}-${task.updatedAt}`}>
+                <TableRow
+                  key={`${task.id}-${task.updatedAt}`}
+                  className={TABLE_ROW_CLASS}
+                >
                   <TableCell className="text-center text-sm text-muted-foreground">
                     {((state.page ?? 1) - 1) * DEFAULT_PAGE_SIZE + index + 1}
                   </TableCell>
@@ -651,18 +677,15 @@ function TasksPage() {
                     />
                   </TableCell>
                   <TableCell className="min-w-[220px] text-center">
-                    <div className="space-y-1">
-                      <Progress
-                        value={task.progress ?? undefined}
-                        indeterminate={task.progress === null}
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        {progressLabel}
-                      </p>
-                    </div>
+                    <span className="inline-flex items-center justify-center px-2 py-1 text-sm text-emerald-400 animate-pulse">
+                      {progressMessageText}
+                    </span>
                   </TableCell>
                   <TableCell className="text-center text-sm text-muted-foreground">
                     {formatDate(task.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {formatDate(task.updatedAt)}
                   </TableCell>
                 </TableRow>
               );
@@ -676,7 +699,7 @@ function TasksPage() {
 
   const renderCompletedTable = () => {
     const state = tabStates.completed;
-    if (state.error) return renderErrorState("completed", state.error);
+    if (state.error) return renderErrorState("completed");
     if (state.isLoading && state.items.length === 0) {
       return (
         <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
@@ -692,7 +715,7 @@ function TasksPage() {
     return (
       <>
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/40 text-xs uppercase tracking-wide">
             <TableRow>
               <TableHead className="w-14 text-center">序号</TableHead>
               <TableHead className="w-[18%] text-center">视频链接</TableHead>
@@ -714,7 +737,10 @@ function TasksPage() {
                 downloadKey && downloadingFileKey === downloadKey,
               );
               return (
-                <TableRow key={`${task.id}-${task.updatedAt}`}>
+                <TableRow
+                  key={`${task.id}-${task.updatedAt}`}
+                  className={TABLE_ROW_CLASS}
+                >
                   <TableCell className="text-center text-sm text-muted-foreground align-middle">
                     {startIndex + index + 1}
                   </TableCell>
@@ -752,7 +778,7 @@ function TasksPage() {
                   <TableCell className="text-center align-middle">
                     {primaryFile ? (
                       <Button
-                        variant="default"
+                        variant="link"
                         size="sm"
                         disabled={isDownloading}
                         onClick={() =>
@@ -779,7 +805,7 @@ function TasksPage() {
 
   const renderFailedTable = () => {
     const state = tabStates.failed;
-    if (state.error) return renderErrorState("failed", state.error);
+    if (state.error) return renderErrorState("failed");
     if (state.isLoading && state.items.length === 0) {
       return (
         <div className="flex flex-col items-center gap-3 py-12 text-sm text-muted-foreground">
@@ -795,7 +821,7 @@ function TasksPage() {
     return (
       <>
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-muted/40 text-xs uppercase tracking-wide">
             <TableRow>
               <TableHead className="w-14 text-center">序号</TableHead>
               <TableHead className="w-[18%] text-center">视频链接</TableHead>
@@ -806,7 +832,10 @@ function TasksPage() {
           </TableHeader>
           <TableBody>
             {state.items.map((task, index) => (
-              <TableRow key={`${task.id}-${task.updatedAt}`}>
+              <TableRow
+                key={`${task.id}-${task.updatedAt}`}
+                className={TABLE_ROW_CLASS}
+              >
                 <TableCell className="text-center text-sm text-muted-foreground">
                   {startIndex + index + 1}
                 </TableCell>
@@ -863,7 +892,7 @@ function TasksPage() {
       <div>
         <h1 className="text-2xl font-semibold text-foreground">任务中心</h1>
       </div>
-      <div className="rounded-xl border bg-background shadow-sm">
+      <div className="rounded-lg border border-border/60 bg-background">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-6">
           <div className="flex flex-wrap gap-2">
             {(Object.keys(TAB_CONFIG) as TaskTabKey[]).map((tabKey) => (
@@ -871,9 +900,9 @@ function TasksPage() {
                 key={tabKey}
                 type="button"
                 className={cn(
-                  "rounded-full px-4 py-1.5 text-sm font-medium transition",
+                  "rounded-full border border-transparent px-4 py-1.5 text-sm font-medium transition",
                   activeTab === tabKey
-                    ? "bg-foreground text-background shadow"
+                    ? "bg-primary/10 text-primary border-primary/50"
                     : "text-muted-foreground hover:text-foreground",
                 )}
                 onClick={() => handleTabChange(tabKey)}
