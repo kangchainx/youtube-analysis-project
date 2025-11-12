@@ -329,7 +329,7 @@ function DetailPage(): JSX.Element {
         description: (
           <Link
             to="/workbench/tasks"
-            className="text-primary underline-offset-4 hover:underline"
+            className="text-foreground underline-offset-4 hover:text-primary hover:underline"
           >
             点击前往查看进度
           </Link>

@@ -275,10 +275,10 @@ function HomePage() {
   }, [profileNavigationPayload, setProfileNavigationState]);
 
   const searchPanelClasses = cn(
-    "mt-10 transition-all duration-300 ease-in-out",
+    "transition-all duration-300 ease-in-out",
     isSearchCollapsed
-      ? "-translate-y-4 max-h-0 overflow-hidden opacity-0 pointer-events-none"
-      : "max-h-[420px] overflow-visible opacity-100 translate-y-0",
+      ? "mt-0 -translate-y-4 max-h-0 overflow-hidden opacity-0 pointer-events-none"
+      : "mt-6 max-h-[420px] overflow-visible opacity-100 translate-y-0",
   );
   const videoListWrapperClasses = cn(
     "w-full max-w-7xl transition-all duration-300 ease-in-out",
@@ -311,7 +311,7 @@ function HomePage() {
   }, [showIntroSection]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-16 md:pt-20">
+    <div className="flex min-h-screen flex-col items-center justify-start px-4 pt-16 md:pt-16">
       <div className="w-full max-w-7xl">
         <div className="relative flex justify-center">
           <Button
