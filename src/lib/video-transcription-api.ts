@@ -30,6 +30,8 @@ export type TaskStatusResponse = {
   videoSourceUrl: string;
   status: TaskStatus;
   progress: number | null;
+  progressMessage?: string | null;
+  progress_message?: string | null;
   errorMessage?: string | null;
   createdAt?: string;
   updatedAt?: string;
@@ -61,6 +63,8 @@ export type TaskListRecord = {
   status: TaskStatus;
   progress: number | null;
   errorMessage?: string | null;
+  progressMessage?: string | null;
+  progress_message?: string | null;
   createdAt?: string;
   updatedAt?: string;
   title?: string | null;
@@ -97,6 +101,8 @@ export type TaskStreamUpdate = {
   taskId: string;
   status: TaskStatus;
   progress: number | null;
+  progressMessage?: string | null;
+  progress_message?: string | null;
   errorMessage?: string | null;
   updatedAt?: string;
 };
@@ -234,6 +240,7 @@ export async function fetchTranscriptionTasks(
 type FetchCompletedDetailsParams = {
   page?: number;
   pageSize?: number;
+  status?: TaskStatus | TaskStatus[];
 };
 
 export async function fetchCompletedTasksWithDetails(
@@ -244,6 +251,16 @@ export async function fetchCompletedTasksWithDetails(
   const pageSize = params.pageSize ?? 20;
   if (page > 0) searchParams.set("page", String(page));
   if (pageSize > 0) searchParams.set("page_size", String(pageSize));
+  const statuses = Array.isArray(params.status)
+    ? params.status
+    : params.status
+      ? [params.status]
+      : [];
+  statuses.forEach((status) => {
+    if (status) {
+      searchParams.append("status", status);
+    }
+  });
 
   const response = await apiFetch<PaginatedTaskEnvelope>(
     `/api/video-transcription/tasks/details${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
