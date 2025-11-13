@@ -1,4 +1,5 @@
 import * as ButtonPrimitive from "@/components/ui/button";
+import { DataErrorState } from "@/components/ui/data-error-state";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
@@ -7,8 +8,9 @@ import type {
   VideoTableRow,
 } from "@/features/home/search-input";
 import YouTubeEmbed from "@/components/video/youtube-embed";
-import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
+import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { getYoutubeApiKey } from "@/lib/config";
+import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
 import { ArrowLeft, ExternalLink, MessageCircle, ThumbsUp } from "lucide-react";
 import { ArrowLineUp, Textbox } from "@phosphor-icons/react";
 import {
@@ -19,7 +21,6 @@ import {
 import type { FormEvent, JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import {
@@ -255,6 +256,9 @@ function DetailPage(): JSX.Element {
     useState<ExportFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [includeHeader, setIncludeHeader] = useState(false);
+  const searchStateSnapshot = (state?.searchState as ChannelVideosState | null) ?? null;
+  const isSubscribed = searchStateSnapshot?.isSubscribed ?? null;
+  const isSubscriptionLoading = searchStateSnapshot?.isSubscriptionLoading ?? false;
 
   const { createTask: enqueueTranscriptionTask } = useTranscriptionTasks();
 
@@ -683,49 +687,70 @@ function DetailPage(): JSX.Element {
     </div>
   );
 
-  const renderChannelSnapshot = () => (
-    <div className="rounded-lg border bg-background p-6 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          {channelSnapshot?.thumbnailUrl ? (
-            <img
-              src={channelSnapshot.thumbnailUrl}
-              alt={`${channelSnapshot.title} 头像`}
-              className="h-16 w-16 rounded-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
-              {channelSnapshot?.title?.[0] ?? "?"}
+  const renderChannelSnapshot = () => {
+    const subscriptionLabel = isSubscriptionLoading
+      ? "查询中..."
+      : isSubscribed
+        ? "已订阅"
+        : "订阅";
+    const subscriptionVariant = isSubscribed ? "secondary" : "default";
+    const showSubscriptionButton = Boolean(videoDetail?.channelId);
+
+    return (
+      <div className="rounded-lg border bg-background p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            {channelSnapshot?.thumbnailUrl ? (
+              <img
+                src={channelSnapshot.thumbnailUrl}
+                alt={`${channelSnapshot.title} 头像`}
+                className="h-16 w-16 rounded-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
+                {channelSnapshot?.title?.[0] ?? "?"}
+              </div>
+            )}
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold">
+                {channelSnapshot?.title ?? "频道详情"}
+              </h3>
+              {channelSnapshot?.handle ? (
+                <p className="text-sm text-muted-foreground">
+                  {channelSnapshot.handle}
+                </p>
+              ) : null}
             </div>
-          )}
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold">
-              {channelSnapshot?.title ?? "频道详情"}
-            </h3>
-            {channelSnapshot?.handle ? (
-              <p className="text-sm text-muted-foreground">
-                {channelSnapshot.handle}
-              </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            {showSubscriptionButton ? (
+              <UIButton
+                type="button"
+                variant={subscriptionVariant}
+                className="w-full sm:w-auto"
+                aria-pressed={isSubscribed ?? false}
+              >
+                {subscriptionLabel}
+              </UIButton>
             ) : null}
+            <UIButton
+              type="button"
+              variant="outline"
+              asChild
+              className="w-full gap-2 sm:w-auto"
+            >
+              <a
+                href={`https://www.youtube.com/${channelSnapshot?.handle ?? ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                浏览频道
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </UIButton>
           </div>
         </div>
-        <UIButton
-          type="button"
-          variant="outline"
-          asChild
-          className="w-full gap-2 sm:w-auto"
-        >
-          <a
-            href={`https://www.youtube.com/${channelSnapshot?.handle ?? ""}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            浏览频道
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
-        </UIButton>
-      </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
           <p className="text-xs uppercase text-muted-foreground">订阅数</p>
@@ -746,13 +771,14 @@ function DetailPage(): JSX.Element {
           </p>
         </div>
       </div>
-      {channelSnapshot?.description ? (
-        <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-          {channelSnapshot.description}
-        </p>
-      ) : null}
-    </div>
-  );
+        {channelSnapshot?.description ? (
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+            {channelSnapshot.description}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderComments = () => {
     if (commentsLoading) {
@@ -928,23 +954,23 @@ function DetailPage(): JSX.Element {
             </div>
 
             {error ? (
-              <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
-                <p className="text-base text-muted-foreground">{error}</p>
-                <div className="flex flex-wrap justify-center gap-3">
+              <div className="space-y-4">
+                <DataErrorState
+                  className="border border-dashed border-muted-foreground/60 bg-background/90"
+                  title="无法加载视频详情"
+                  description={error}
+                  actionLabel="重新加载"
+                  onRetry={() => {
+                    setRefreshCounter((previous) => previous + 1);
+                  }}
+                />
+                <div className="flex justify-center">
                   <UIButton
                     type="button"
                     variant="outline"
                     onClick={handleBack}
                   >
                     返回上一页
-                  </UIButton>
-                  <UIButton
-                    type="button"
-                    onClick={() => {
-                      setRefreshCounter((previous) => previous + 1);
-                    }}
-                  >
-                    重试
                   </UIButton>
                 </div>
               </div>

@@ -7,6 +7,7 @@ import {
   videosList,
 } from "@/lib/youtube";
 import { getYoutubeApiKey } from "@/lib/config";
+import { apiFetch, ApiError } from "@/lib/api-client";
 import { Search } from "lucide-react";
 import {
   type ChangeEvent,
@@ -133,6 +134,8 @@ export type ChannelVideosState = {
   videos: VideoTableRow[];
   error: string | null;
   isLoading: boolean;
+  isSubscribed: boolean | null;
+  isSubscriptionLoading: boolean;
 };
 
 export type ChannelSuggestion = {
@@ -233,6 +236,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         videos: [],
         error: null,
         isLoading: false,
+        isSubscribed: null,
+        isSubscriptionLoading: false,
       });
     }, [onChannelVideosUpdate]);
 
@@ -258,6 +263,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           videos: [],
           error: null,
           isLoading: true,
+          isSubscribed: null,
+          isSubscriptionLoading: false,
         };
 
         const pushState = (partial: Partial<ChannelVideosState> = {}) => {
@@ -272,6 +279,28 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           if (!count) return 0;
           const parsed = Number(count);
           return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const fetchSubscriptionStatus = async (channelId: string) => {
+          try {
+            const response = await apiFetch<{ data?: { subscribed?: boolean } }>(
+              `/api/youtube/subscription-status?channel_id=${encodeURIComponent(channelId)}`,
+              { signal: controller.signal },
+            );
+            return typeof response?.data?.subscribed === "boolean"
+              ? response.data.subscribed
+              : null;
+          } catch (subscriptionError) {
+            if (controller.signal.aborted) return null;
+            if (
+              subscriptionError instanceof ApiError &&
+              subscriptionError.status === 401
+            ) {
+              return null;
+            }
+            console.error("Failed to fetch subscription status", subscriptionError);
+            return null;
+          }
         };
 
         try {
@@ -305,6 +334,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               videos: [],
               isLoading: false,
               channelId: "",
+              isSubscriptionLoading: false,
+              isSubscribed: null,
             });
             return;
           }
@@ -332,6 +363,15 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           pushState({
             channelId,
             channelMetadata,
+            isSubscriptionLoading: true,
+            isSubscribed: null,
+          });
+
+          const subscriptionStatus = await fetchSubscriptionStatus(channelId);
+          if (controller.signal.aborted) return;
+          pushState({
+            isSubscribed: subscriptionStatus,
+            isSubscriptionLoading: false,
           });
 
           const playlistMetadata = new Map<
@@ -603,6 +643,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             videos: [],
             channelMetadata: null,
             isLoading: false,
+            isSubscriptionLoading: false,
           });
         } finally {
           if (videosAbortControllerRef.current === controller) {
