@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 type ChannelsListItem = {
   id?: string;
@@ -168,6 +169,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
     }: SearchInputProps,
     ref,
   ) {
+    const navigate = useNavigate();
     const [value, setValue] = useState("");
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLFormElement>(null);
@@ -175,6 +177,50 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
     const lastRequestRef = useRef<{ query: string; channelId?: string } | null>(
       null,
     );
+
+    const extractVideoIdFromUrl = useCallback((url: string): string | null => {
+      const trimmed = url.trim();
+      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+        return null;
+      }
+
+      try {
+        // 处理各种 YouTube URL 格式
+        // http://www.youtube.com/watch?v=VIDEO_ID
+        // https://www.youtube.com/watch?v=VIDEO_ID
+        // http://www.youtube.com/embed/VIDEO_ID
+        // https://youtu.be/VIDEO_ID
+        // http://youtube.com/watch?v=VIDEO_ID&other=params
+        
+        // 如果包含 youtu.be
+        const youtuBeMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+        if (youtuBeMatch) {
+          return youtuBeMatch[1];
+        }
+
+        // 如果包含 youtube.com/watch?v=
+        const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+        if (watchMatch) {
+          return watchMatch[1];
+        }
+
+        // 如果包含 youtube.com/embed/
+        const embedMatch = trimmed.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+        if (embedMatch) {
+          return embedMatch[1];
+        }
+
+        // 如果包含 youtube.com/v/
+        const vMatch = trimmed.match(/youtube\.com\/v\/([a-zA-Z0-9_-]{11})/);
+        if (vMatch) {
+          return vMatch[1];
+        }
+
+        return null;
+      } catch {
+        return null;
+      }
+    }, []);
 
     const resetChannelVideos = useCallback(() => {
       videosAbortControllerRef.current?.abort();
@@ -630,6 +676,17 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       if (!trimmed) return;
 
       setIsOpen(false);
+
+      // 检查是否以 http:// 或 https:// 开头，如果是，尝试提取视频ID并跳转
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        const videoId = extractVideoIdFromUrl(trimmed);
+        if (videoId) {
+          navigate(`/detail/${videoId}`);
+          return;
+        }
+      }
+
+      // 保持原有逻辑
       if (isGlobalSearchEnabled) {
         void onSearch(trimmed);
         return;
@@ -718,7 +775,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="输入频道ID进行搜索"
+                placeholder="输入频道ID或视频地址进行搜索"
                 className="h-12 rounded-none border-0 bg-transparent pl-11 pr-4 text-base shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 value={value}
                 onChange={handleChange}
