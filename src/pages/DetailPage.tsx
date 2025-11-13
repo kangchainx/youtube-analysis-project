@@ -32,12 +32,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ExportFormat } from "@/lib/video-transcription-api";
@@ -973,77 +970,90 @@ function DetailPage(): JSX.Element {
           </DialogHeader>
 
           <form className="space-y-6" onSubmit={handleTranscriptionConfirm}>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="export-format">导出格式</Label>
-                <Select
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">导出格式</Label>
+                <RadioGroup
                   value={selectedExportFormat}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     setSelectedExportFormat(value as ExportFormat)
                   }
                   disabled={isCreatingTranscription}
+                  className="space-y-3"
                 >
-                  <SelectTrigger
-                    id="export-format"
-                    className="custom-select-trigger flex h-12 w-full items-center text-left text-base"
-                  >
-                    <SelectValue placeholder="请选择导出格式" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
-                      <SelectItem
-                        key={option.value}
+                  {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
+                    <div
+                      key={option.value}
+                      className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                    >
+                      <RadioGroupItem
                         value={option.value}
-                        textValue={option.label}
+                        id={option.value}
+                        className="mt-0.5"
+                      />
+                      <Label
+                        htmlFor={option.value}
+                        className="flex-1 cursor-pointer space-y-0.5"
                       >
-                        <div className="flex flex-col">
-                          <span>{option.label}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {option.description}
-                          </span>
+                        <div className="font-medium text-sm">{option.label}</div>
+                        <div className="text-xs leading-relaxed text-muted-foreground">
+                          {option.description}
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="include-timestamps">包含时间戳</Label>
-                  <p className="text-xs text-muted-foreground">
-                    在每段文本前保留字幕时间码，便于定位。
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
+                  <div className="flex-1 space-y-0.5 pr-4">
+                    <Label
+                      htmlFor="include-timestamps"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      包含时间戳
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      在每段文本前保留字幕时间码，便于定位。
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-timestamps"
+                    checked={includeTimestamps}
+                    onCheckedChange={setIncludeTimestamps}
+                    disabled={isCreatingTranscription}
+                  />
                 </div>
-                <Switch
-                  id="include-timestamps"
-                  checked={includeTimestamps}
-                  onCheckedChange={setIncludeTimestamps}
-                  disabled={isCreatingTranscription}
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="include-header">包含头部信息</Label>
-                  <p className="text-xs text-muted-foreground">
-                    在开头附上视频标题、链接等元信息。
-                  </p>
+                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
+                  <div className="flex-1 space-y-0.5 pr-4">
+                    <Label
+                      htmlFor="include-header"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      包含头部信息
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      在开头附上视频标题、链接等元信息。
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-header"
+                    checked={includeHeader}
+                    onCheckedChange={setIncludeHeader}
+                    disabled={isCreatingTranscription}
+                  />
                 </div>
-                <Switch
-                  id="include-header"
-                  checked={includeHeader}
-                  onCheckedChange={setIncludeHeader}
-                  disabled={isCreatingTranscription}
-                />
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
               <DialogClose asChild>
                 <UIButton
                   type="button"
                   variant="outline"
                   disabled={isCreatingTranscription}
+                  className="min-w-[100px]"
                 >
                   取消
                 </UIButton>
@@ -1054,7 +1064,10 @@ function DetailPage(): JSX.Element {
                 className="min-w-[120px]"
               >
                 {isCreatingTranscription ? (
-                  <Spinner className="h-4 w-4 text-primary-foreground" />
+                  <>
+                    <Spinner className="mr-2 h-4 w-4 text-primary-foreground" />
+                    创建中...
+                  </>
                 ) : (
                   "开始转文字"
                 )}
