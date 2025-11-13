@@ -1,4 +1,5 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
+import { Home, LayoutDashboard } from "lucide-react";
 import { UserAccountDropdown } from "@/components/user-account-dropdown";
 import { cn } from "@/lib/utils";
 
@@ -33,14 +34,27 @@ export function AppHeader({ className }: AppHeaderProps) {
       </Link>
       <div className="flex items-center gap-3">
         <NavLink
+          to="/home"
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-all duration-300 ease-in-out hover:scale-105 hover:text-primary",
+              isActive && "text-primary",
+            )
+          }
+        >
+          <Home className="h-4 w-4" />
+          首页
+        </NavLink>
+        <NavLink
           to="/workbench"
           className={({ isActive }) =>
             cn(
-              "text-sm font-medium text-muted-foreground transition-all duration-300 ease-in-out hover:scale-105 hover:text-primary",
+              "flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-all duration-300 ease-in-out hover:scale-105 hover:text-primary",
               (isActive || isOnWorkbench) && "text-primary",
             )
           }
         >
+          <LayoutDashboard className="h-4 w-4" />
           工作台
         </NavLink>
         <UserAccountDropdown />
