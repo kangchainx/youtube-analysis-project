@@ -4,6 +4,7 @@ import ChannelSpotlightCard, {
   type ChannelSpotlight,
 } from "@/features/home/channel-spotlight-card";
 import { apiFetch } from "@/lib/api-client";
+import { DataErrorState } from "@/components/ui/data-error-state";
 
 type SpotlightChannelResponse = {
   handle?: string;
@@ -27,6 +28,7 @@ const TestimonialsStrip = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [placeholderCount, setPlaceholderCount] =
     useState<number>(PLACEHOLDER_COUNT);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,6 +81,8 @@ const TestimonialsStrip = () => {
           })
           .filter((item) => item.name.trim().length > 0);
 
+        if (controller.signal.aborted) return;
+
         setPlaceholderCount(
           normalized.length > 0 ? normalized.length : PLACEHOLDER_COUNT,
         );
@@ -94,6 +98,7 @@ const TestimonialsStrip = () => {
         setErrorMessage(
           error instanceof Error ? error.message : "加载精选频道信息失败。",
         );
+        setPlaceholderCount(PLACEHOLDER_COUNT);
         setSpotlightChannels([]);
       } finally {
         if (!controller.signal.aborted) {
@@ -107,7 +112,7 @@ const TestimonialsStrip = () => {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [retryKey]);
 
   const duplicatedList = useMemo(
     () =>
@@ -118,6 +123,9 @@ const TestimonialsStrip = () => {
   );
   const hoverCounterRef = useRef(0);
   const [isPaused, setIsPaused] = useState(false);
+  const handleRetry = () => {
+    setRetryKey((current) => current + 1);
+  };
 
   const handleHoverChange = (hovering: boolean) => {
     hoverCounterRef.current += hovering ? 1 : -1;
@@ -125,7 +133,9 @@ const TestimonialsStrip = () => {
     setIsPaused(hoverCounterRef.current > 0);
   };
 
-  const showEmptyState = !isLoading && spotlightChannels.length === 0;
+  const shouldShowErrorState = Boolean(errorMessage && !isLoading);
+  const showEmptyState =
+    !isLoading && spotlightChannels.length === 0 && !errorMessage;
 
   return (
     <div className="mt-6 flex flex-col items-center gap-4">
@@ -161,6 +171,18 @@ const TestimonialsStrip = () => {
               />
             ))}
           </div>
+        ) : shouldShowErrorState ? (
+          <div className="absolute inset-0 flex items-center justify-center px-4">
+            <DataErrorState
+              className="w-full max-w-md bg-background/95"
+              title="精选频道加载失败"
+              description={
+                errorMessage ?? "暂时无法获取精选频道，请稍后重试。"
+              }
+              actionLabel="重新加载"
+              onRetry={handleRetry}
+            />
+          </div>
         ) : (
           <div className="absolute inset-0 flex w-max items-center gap-6">
             {Array.from({ length: placeholderCount }).map((_, index) => (
@@ -191,9 +213,7 @@ const TestimonialsStrip = () => {
           </div>
         )}
       </div>
-      {errorMessage ? (
-        <p className="text-sm text-destructive">{errorMessage}</p>
-      ) : showEmptyState ? (
+      {showEmptyState ? (
         <p className="text-sm text-muted-foreground">
           暂无法加载精选频道，请稍后重试。
         </p>

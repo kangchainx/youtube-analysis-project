@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   fetchCurrentUserProfile,
@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Spinner } from "@/components/ui/spinner";
+import { DataErrorState } from "@/components/ui/data-error-state";
 
 type ProfileStatus =
   | { type: "idle" }
@@ -91,6 +92,9 @@ function ProfilePage() {
     | { type: "error"; message: string }
     | { type: "success"; message: string }
   >({ type: "idle" });
+  const [initialLoadError, setInitialLoadError] = useState<string | null>(null);
+  const isMountedRef = useRef(true);
+  const profileRequestIdRef = useRef(0);
 
   const baselineProfile = useMemo<UserProfile | null>(() => {
     if (profile) return profile;
@@ -119,51 +123,64 @@ function ProfilePage() {
     );
   }, [baselineProfile]);
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchProfile = useCallback(async () => {
+    profileRequestIdRef.current += 1;
+    const requestId = profileRequestIdRef.current;
+
+    setInitialLoadError(null);
     setStatus({ type: "loading" });
 
-    fetchCurrentUserProfile()
-      .then((data) => {
-        if (!isMounted) return;
-        setProfile(data);
-        setFormState({
-          name: data.name ?? "",
-          email: data.email ?? "",
-          avatar: resolveAvatarUrl(data),
-        });
-        setStatus({ type: "idle" });
-      })
-      .catch((error) => {
-        if (!isMounted) return;
-        if (error instanceof ApiError) {
-          setStatus({
-            type: "error",
-            message:
-              error.message ||
-              "无法获取个人信息。请稍后重试或联系管理员配置相关接口。",
-          });
-        } else if (error instanceof Error) {
-          setStatus({ type: "error", message: error.message });
-        } else {
-          setStatus({
-            type: "error",
-            message: "获取个人信息失败，请稍后重试。",
-          });
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setStatus((previous) =>
-            previous.type === "loading" ? { type: "idle" } : previous,
-          );
-        }
+    try {
+      const data = await fetchCurrentUserProfile();
+      if (!isMountedRef.current || requestId !== profileRequestIdRef.current) {
+        return;
+      }
+      setProfile(data);
+      setFormState({
+        name: data.name ?? "",
+        email: data.email ?? "",
+        avatar: resolveAvatarUrl(data),
       });
-
-    return () => {
-      isMounted = false;
-    };
+      setStatus({ type: "idle" });
+    } catch (error) {
+      if (!isMountedRef.current || requestId !== profileRequestIdRef.current) {
+        return;
+      }
+      if (error instanceof ApiError) {
+        const message =
+          error.message ||
+          "无法获取个人信息。请稍后重试或联系管理员配置相关接口。";
+        setInitialLoadError(message);
+        setStatus({
+          type: "error",
+          message,
+        });
+      } else if (error instanceof Error) {
+        setInitialLoadError(error.message);
+        setStatus({ type: "error", message: error.message });
+      } else {
+        const fallback = "获取个人信息失败，请稍后重试。";
+        setInitialLoadError(fallback);
+        setStatus({
+          type: "error",
+          message: fallback,
+        });
+      }
+    } finally {
+      if (isMountedRef.current && requestId === profileRequestIdRef.current) {
+        setStatus((previous) =>
+          previous.type === "loading" ? { type: "idle" } : previous,
+        );
+      }
+    }
   }, []);
+
+  useEffect(() => {
+    void fetchProfile();
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [fetchProfile]);
 
   useEffect(() => {
     if (!profile) return;
@@ -250,7 +267,11 @@ function ProfilePage() {
 
   const currentAvatarUrl = formState.avatar.trim() || baselineAvatar;
 
-  const isLoading = status.type === "loading" && !baselineProfile;
+  const isInitialLoading = status.type === "loading" && !baselineProfile;
+  const handleProfileRetry = useCallback(() => {
+    if (!isMountedRef.current) return;
+    void fetchProfile();
+  }, [fetchProfile]);
 
   const handlePasswordSubmit = async (
     event: React.FormEvent<HTMLFormElement>,
@@ -352,212 +373,232 @@ function ProfilePage() {
           </div>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
+          {isInitialLoading ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center text-sm text-muted-foreground">
               <Spinner className="size-6 text-primary" />
               <p>正在加载个人信息，请稍候…</p>
               <p className="text-xs">若长时间未响应，可刷新页面重新尝试。</p>
             </div>
+          ) : !baselineProfile && initialLoadError ? (
+            <div className="py-6">
+              <DataErrorState
+                title="无法加载个人信息"
+                description={initialLoadError}
+                actionLabel="重新加载"
+                onRetry={handleProfileRetry}
+              />
+            </div>
           ) : (
-            <form
-              className="flex flex-col gap-8"
-              onSubmit={handleSubmit}
-              noValidate
-            >
-              {status.type === "error" && (
-                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                  {status.message}
-                </div>
-              )}
-              {status.type === "success" && (
-                <div className="rounded-md border border-emerald-300/60 bg-emerald-100/60 px-4 py-3 text-sm text-emerald-800">
-                  {status.message}
-                </div>
-              )}
-
-              {isEmailPasswordUser ? (
-                <div className="rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
-                  您是通过邮箱注册的用户，因此此处不会显示任何 Google
-                  账号相关信息。
-                </div>
+            <>
+              {initialLoadError ? (
+                <DataErrorState
+                  className="mb-6"
+                  title="未能同步最新个人信息"
+                  description={initialLoadError}
+                  actionLabel="重新加载"
+                  onRetry={handleProfileRetry}
+                />
               ) : null}
+              <form
+                className="flex flex-col gap-8"
+                onSubmit={handleSubmit}
+                noValidate
+              >
+                {status.type === "error" && !initialLoadError && (
+                  <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                    {status.message}
+                  </div>
+                )}
+                {status.type === "success" && (
+                  <div className="rounded-md border border-emerald-300/60 bg-emerald-100/60 px-4 py-3 text-sm text-emerald-800">
+                    {status.message}
+                  </div>
+                )}
 
-              <div className="flex flex-col gap-6 md:flex-row md:items-start">
-                <div className="flex flex-col items-center gap-3 md:w-56">
-                  <Avatar className="h-24 w-24 border border-border/70 shadow-sm">
-                    {currentAvatarUrl ? (
-                      <AvatarImage src={currentAvatarUrl} alt="用户头像" />
-                    ) : null}
-                    <AvatarFallback className="text-lg font-semibold">
-                      {avatarFallback}
-                    </AvatarFallback>
-                  </Avatar>
-                  <p className="text-xs text-muted-foreground">
-                    输入头像图片的 URL 地址后保存即可更新头像。
-                  </p>
-                  <Dialog
-                    onOpenChange={handlePasswordDialogOpenChange}
-                    open={isPasswordDialogOpen}
-                  >
-                    <DialogTrigger asChild>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="mt-2 flex items-center gap-2"
-                      >
-                        <LockIcon className="h-4 w-4" />
-                        修改密码
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-md">
-                      <DialogHeader>
-                        <DialogTitle>修改密码</DialogTitle>
-                        <DialogDescription>
-                          更新登录密码后，下次登录请使用新密码。
-                        </DialogDescription>
-                      </DialogHeader>
-                      <form
-                        className="space-y-4"
-                        onSubmit={handlePasswordSubmit}
-                      >
-                        <FieldGroup>
-                          <Field>
-                            <FieldLabel htmlFor="currentPassword">
-                              当前密码
-                            </FieldLabel>
-                            <Input
-                              id="currentPassword"
-                              name="currentPassword"
-                              type="password"
-                              autoComplete="current-password"
-                              placeholder="请输入当前密码"
-                            />
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="newPassword">
-                              新密码
-                            </FieldLabel>
-                            <Input
-                              id="newPassword"
-                              name="newPassword"
-                              type="password"
-                              autoComplete="new-password"
-                              placeholder="请输入新密码"
-                            />
-                            <FieldDescription>
-                              密码不少于 8 个字符。
-                            </FieldDescription>
-                          </Field>
-                          <Field>
-                            <FieldLabel htmlFor="confirmPassword">
-                              确认新密码
-                            </FieldLabel>
-                            <Input
-                              id="confirmPassword"
-                              name="confirmPassword"
-                              type="password"
-                              autoComplete="new-password"
-                              placeholder="再次输入新密码"
-                            />
-                          </Field>
-                        </FieldGroup>
+                {isEmailPasswordUser ? (
+                  <div className="rounded-md border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-primary">
+                    您是通过邮箱注册的用户，因此此处不会显示任何 Google
+                    账号相关信息。
+                  </div>
+                ) : null}
 
-                        {passwordStatus.type === "error" ? (
-                          <Alert variant="destructive">
-                            <AlertCircleIcon />
-                            {/* <AlertTitle>更新失败</AlertTitle> */}
-                            <AlertDescription>
-                              {passwordStatus.message}
-                            </AlertDescription>
-                          </Alert>
-                        ) : null}
-                        {passwordStatus.type === "success" ? (
-                          <Alert>
-                            <CheckCircle2Icon />
-                            {/* <AlertTitle>更新成功</AlertTitle> */}
-                            <AlertDescription>
-                              {passwordStatus.message}
-                            </AlertDescription>
-                          </Alert>
-                        ) : null}
+                <div className="flex flex-col gap-6 md:flex-row md:items-start">
+                  <div className="flex flex-col items-center gap-3 md:w-56">
+                    <Avatar className="h-24 w-24 border border-border/70 shadow-sm">
+                      {currentAvatarUrl ? (
+                        <AvatarImage src={currentAvatarUrl} alt="用户头像" />
+                      ) : null}
+                      <AvatarFallback className="text-lg font-semibold">
+                        {avatarFallback}
+                      </AvatarFallback>
+                    </Avatar>
+                    <p className="text-xs text-muted-foreground">
+                      输入头像图片的 URL 地址后保存即可更新头像。
+                    </p>
+                    <Dialog
+                      onOpenChange={handlePasswordDialogOpenChange}
+                      open={isPasswordDialogOpen}
+                    >
+                      <DialogTrigger asChild>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 flex items-center gap-2"
+                        >
+                          <LockIcon className="h-4 w-4" />
+                          修改密码
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>修改密码</DialogTitle>
+                          <DialogDescription>
+                            更新登录密码后，下次登录请使用新密码。
+                          </DialogDescription>
+                        </DialogHeader>
+                        <form
+                          className="space-y-4"
+                          onSubmit={handlePasswordSubmit}
+                        >
+                          <FieldGroup>
+                            <Field>
+                              <FieldLabel htmlFor="currentPassword">
+                                当前密码
+                              </FieldLabel>
+                              <Input
+                                id="currentPassword"
+                                name="currentPassword"
+                                type="password"
+                                autoComplete="current-password"
+                                placeholder="请输入当前密码"
+                              />
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="newPassword">
+                                新密码
+                              </FieldLabel>
+                              <Input
+                                id="newPassword"
+                                name="newPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                placeholder="请输入新密码"
+                              />
+                              <FieldDescription>
+                                密码不少于 8 个字符。
+                              </FieldDescription>
+                            </Field>
+                            <Field>
+                              <FieldLabel htmlFor="confirmPassword">
+                                确认新密码
+                              </FieldLabel>
+                              <Input
+                                id="confirmPassword"
+                                name="confirmPassword"
+                                type="password"
+                                autoComplete="new-password"
+                                placeholder="再次输入新密码"
+                              />
+                            </Field>
+                          </FieldGroup>
 
-                        <DialogFooter>
-                          <DialogClose asChild>
-                            <Button type="button" variant="outline">
-                              取消
+                          {passwordStatus.type === "error" ? (
+                            <Alert variant="destructive">
+                              <AlertCircleIcon />
+                              {/* <AlertTitle>更新失败</AlertTitle> */}
+                              <AlertDescription>
+                                {passwordStatus.message}
+                              </AlertDescription>
+                            </Alert>
+                          ) : null}
+                          {passwordStatus.type === "success" ? (
+                            <Alert>
+                              <CheckCircle2Icon />
+                              {/* <AlertTitle>更新成功</AlertTitle> */}
+                              <AlertDescription>
+                                {passwordStatus.message}
+                              </AlertDescription>
+                            </Alert>
+                          ) : null}
+
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <Button type="button" variant="outline">
+                                取消
+                              </Button>
+                            </DialogClose>
+                            <Button
+                              type="submit"
+                              disabled={passwordStatus.type === "loading"}
+                            >
+                              {passwordStatus.type === "loading"
+                                ? "保存中..."
+                                : "保存密码"}
                             </Button>
-                          </DialogClose>
-                          <Button
-                            type="submit"
-                            disabled={passwordStatus.type === "loading"}
-                          >
-                            {passwordStatus.type === "loading"
-                              ? "保存中..."
-                              : "保存密码"}
-                          </Button>
-                        </DialogFooter>
-                      </form>
-                    </DialogContent>
-                  </Dialog>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <div className="flex-1">
+                    <FieldGroup>
+                      <Field>
+                        <FieldLabel htmlFor="email">邮箱</FieldLabel>
+                        <Input
+                          id="email"
+                          name="email"
+                          type="email"
+                          placeholder="m@example.com"
+                          value={formState.email}
+                          readOnly
+                          aria-readonly="true"
+                          autoComplete="email"
+                          className="bg-muted/40 text-muted-foreground"
+                        />
+                        <FieldDescription>
+                          邮箱仅用于登录与通知，如需修改请联系管理员。
+                        </FieldDescription>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="name">昵称</FieldLabel>
+                        <Input
+                          id="name"
+                          name="name"
+                          placeholder="请输入昵称"
+                          value={formState.name}
+                          onChange={handleInputChange}
+                          disabled={isSaving}
+                        />
+                        <FieldDescription>
+                          此昵称会显示在系统导航以及其他需要展示用户名的地方。
+                        </FieldDescription>
+                      </Field>
+                      <Field>
+                        <FieldLabel htmlFor="avatar">头像链接</FieldLabel>
+                        <Input
+                          id="avatar"
+                          name="avatar"
+                          placeholder="https://example.com/avatar.png"
+                          value={formState.avatar}
+                          onChange={handleInputChange}
+                          disabled={isSaving}
+                        />
+                        <FieldDescription>
+                          支持 PNG、JPG、SVG 等图片地址。留空则使用默认头像。
+                        </FieldDescription>
+                      </Field>
+                    </FieldGroup>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <FieldGroup>
-                    <Field>
-                      <FieldLabel htmlFor="email">邮箱</FieldLabel>
-                      <Input
-                        id="email"
-                        name="email"
-                        type="email"
-                        placeholder="m@example.com"
-                        value={formState.email}
-                        readOnly
-                        aria-readonly="true"
-                        autoComplete="email"
-                        className="bg-muted/40 text-muted-foreground"
-                      />
-                      <FieldDescription>
-                        邮箱仅用于登录与通知，如需修改请联系管理员。
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="name">昵称</FieldLabel>
-                      <Input
-                        id="name"
-                        name="name"
-                        placeholder="请输入昵称"
-                        value={formState.name}
-                        onChange={handleInputChange}
-                        disabled={isSaving}
-                      />
-                      <FieldDescription>
-                        此昵称会显示在系统导航以及其他需要展示用户名的地方。
-                      </FieldDescription>
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="avatar">头像链接</FieldLabel>
-                      <Input
-                        id="avatar"
-                        name="avatar"
-                        placeholder="https://example.com/avatar.png"
-                        value={formState.avatar}
-                        onChange={handleInputChange}
-                        disabled={isSaving}
-                      />
-                      <FieldDescription>
-                        支持 PNG、JPG、SVG 等图片地址。留空则使用默认头像。
-                      </FieldDescription>
-                    </Field>
-                  </FieldGroup>
-                </div>
-              </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <Button type="submit" disabled={isSaving || !hasChanges}>
-                  {isSaving ? "保存中..." : "保存修改"}
-                </Button>
-              </div>
-            </form>
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <Button type="submit" disabled={isSaving || !hasChanges}>
+                    {isSaving ? "保存中..." : "保存修改"}
+                  </Button>
+                </div>
+              </form>
+            </>
           )}
         </CardContent>
         <CardFooter className="justify-end text-xs text-muted-foreground">
