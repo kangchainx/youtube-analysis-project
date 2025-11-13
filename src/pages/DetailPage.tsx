@@ -851,6 +851,25 @@ function DetailPage(): JSX.Element {
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {showScrollTop ? (
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <UIButton
+                type="button"
+                size="icon"
+                className={actionButtonClasses}
+                aria-label="返回上一页"
+                onClick={handleBack}
+                variant="plain"
+              >
+                <ArrowLeft size={32} />
+              </UIButton>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">
+              返回上一页
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
             <UIButton
