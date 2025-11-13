@@ -137,8 +137,8 @@ const ChannelSpotlightCard = ({
           </div>
         </div>
       ) : null}
-      <CardHeader className="space-y-4 p-6 pb-4">
-        <div className="flex items-center gap-3">
+      <CardHeader className="flex min-h-0 flex-1 flex-col gap-4 p-6 pb-4">
+        <div className="flex shrink-0 items-center gap-3">
           <Avatar className="size-12 border border-border/60">
             {spotlight.avatarUrl ? (
               <AvatarImage src={spotlight.avatarUrl} alt={spotlight.name} />
@@ -147,7 +147,7 @@ const ChannelSpotlightCard = ({
               {spotlight.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-col">
+          <div className="flex shrink-0 flex-col">
             <div className="flex items-center">
               <CardTitle className="text-xl font-semibold text-foreground">
                 {spotlight.name}
@@ -163,9 +163,11 @@ const ChannelSpotlightCard = ({
             </span>
           </div>
         </div>
-        <p className="text-sm leading-relaxed text-muted-foreground line-clamp-3">
-          {spotlight.description}
-        </p>
+        <div className="min-h-0 flex-1">
+          <p className="text-sm leading-relaxed text-muted-foreground line-clamp-3">
+            {spotlight.description}
+          </p>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-2 p-6 pt-0">
         <div className="flex items-center justify-between rounded-lg border border-border/40 bg-muted/30 px-4 py-2 text-sm font-medium text-foreground">
