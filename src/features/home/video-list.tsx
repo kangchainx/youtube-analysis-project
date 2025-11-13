@@ -35,18 +35,24 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { DataErrorState } from "@/components/ui/data-error-state";
 import type { ChannelVideosState } from "@/features/home/search-input";
 import { exportVideosToCsv, exportVideosToExcel } from "@/lib/export-utils";
 import {
+  BellPlus,
+  Check,
   Download,
   FileSpreadsheet,
   FileText,
   LayoutGrid,
   List,
+  Loader2,
   MessageCircle,
   RefreshCw,
   ThumbsUp,
 } from "lucide-react";
+import { apiFetch, ApiError } from "@/lib/api-client";
+import { toast } from "sonner";
 import type { JSX, MouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -69,6 +75,7 @@ interface VideoListProps {
   onRefresh?: () => void;
   showHotComments?: boolean;
   isGlobalSearchEnabled?: boolean;
+  onSubscriptionChange?: (patch: Partial<ChannelVideosState>) => void;
 }
 
 function VideoList({
@@ -76,6 +83,7 @@ function VideoList({
   onRefresh,
   showHotComments = false,
   isGlobalSearchEnabled = false,
+  onSubscriptionChange,
 }: VideoListProps) {
   const { channelName, channelMetadata, videos, isLoading, error } =
     channelVideosState;
@@ -194,6 +202,43 @@ function VideoList({
     }
   };
 
+  const handleSubscribe = async () => {
+    const channelId = channelVideosState.channelId?.trim();
+    if (
+      !channelId ||
+      channelVideosState.isSubscribed ||
+      channelVideosState.isSubscriptionLoading
+    ) {
+      return;
+    }
+
+    onSubscriptionChange?.({ isSubscriptionLoading: true });
+    try {
+      await apiFetch("/api/youtube/subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+      onSubscriptionChange?.({
+        isSubscribed: true,
+        isSubscriptionLoading: false,
+      });
+      toast.success("订阅成功");
+    } catch (caught) {
+      console.error("Subscribe request failed", caught);
+      const message =
+        caught instanceof ApiError
+          ? caught.message || "订阅失败，请稍后重试。"
+          : caught instanceof Error
+            ? caught.message
+            : "订阅失败，请稍后重试。";
+      toast.error(message);
+      onSubscriptionChange?.({ isSubscriptionLoading: false });
+    }
+  };
+
   const paginationItems = useMemo(() => {
     if (totalPages <= 1) return [];
 
@@ -305,6 +350,34 @@ function VideoList({
       </div>
     );
 
+    const subscriptionLabel = channelVideosState.isSubscriptionLoading
+      ? "处理中..."
+      : channelVideosState.isSubscribed
+        ? "已订阅"
+        : "订阅";
+    const subscribeButton = (
+      <Button
+        type="button"
+        size="sm"
+        className="h-8 gap-1 px-3 text-xs"
+        variant={channelVideosState.isSubscribed ? "secondary" : "default"}
+        disabled={
+          channelVideosState.isSubscriptionLoading ||
+          channelVideosState.isSubscribed
+        }
+        onClick={handleSubscribe}
+      >
+        {channelVideosState.isSubscriptionLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+        ) : channelVideosState.isSubscribed ? (
+          <Check className="h-4 w-4" aria-hidden="true" />
+        ) : (
+          <BellPlus className="h-4 w-4" aria-hidden="true" />
+        )}
+        {subscriptionLabel}
+      </Button>
+    );
+
     const exportButton = exportDisabled ? (
       <Button
         type="button"
@@ -367,6 +440,7 @@ function VideoList({
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {viewToggle}
+            {subscribeButton}
             {exportButton}
             {onRefresh ? (
               <Tooltip delayDuration={100}>
@@ -475,12 +549,17 @@ function VideoList({
     bodyContent = null;
   } else if (error) {
     bodyContent = (
-      <Empty className="border border-dashed border-muted-foreground/40 bg-muted/10">
-        <EmptyHeader>
-          <EmptyTitle>Failed to load videos</EmptyTitle>
-          <EmptyDescription>{error}</EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <DataErrorState
+        className="border border-dashed border-muted-foreground/40 bg-muted/10"
+        title="频道数据加载失败"
+        description={
+          error === "Failed to load channel videos"
+            ? "加载频道内容时发生错误，请稍后重试。"
+            : error
+        }
+        actionLabel={onRefresh ? "重新加载" : undefined}
+        onRetry={onRefresh}
+      />
     );
   } else if (hasChannelMetadata && isLoading) {
     if (isCardView) {
@@ -518,8 +597,11 @@ function VideoList({
       const skeletonRows = Array.from({ length: Math.min(pageSize, 5) }).map(
         (_, index) => (
           <TableRow key={index}>
+            <TableCell className="w-16 text-center text-sm text-muted-foreground">
+              <Skeleton className="mx-auto h-4 w-8" />
+            </TableCell>
             <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
-              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mx-auto h-4 w-20" />
             </TableCell>
             <TableCell className="max-w-[260px]">
               <div className="flex min-w-0 items-center gap-3">
@@ -527,14 +609,14 @@ function VideoList({
                 <Skeleton className="h-8 w-14 shrink-0" />
               </div>
             </TableCell>
-            <TableCell className="text-center">
-              <Skeleton className="mx-auto h-4 w-16" />
+            <TableCell className="w-24 text-center">
+              <Skeleton className="mx-auto h-4 w-14" />
             </TableCell>
-            <TableCell className="text-center">
-              <Skeleton className="mx-auto h-4 w-16" />
+            <TableCell className="w-24 text-center">
+              <Skeleton className="mx-auto h-4 w-14" />
             </TableCell>
-            <TableCell className="text-center">
-              <Skeleton className="mx-auto h-4 w-16" />
+            <TableCell className="w-24 text-center">
+              <Skeleton className="mx-auto h-4 w-14" />
             </TableCell>
             {showHotComments ? (
               <TableCell className="text-left">
@@ -549,20 +631,23 @@ function VideoList({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">
+                <Skeleton className="mx-auto h-3 w-8" />
+              </TableHead>
               <TableHead className="w-28 text-center">
                 <Skeleton className="h-3 w-16" />
               </TableHead>
               <TableHead className="max-w-[260px]">
                 <Skeleton className="h-3 w-28" />
               </TableHead>
-              <TableHead className="text-center">
-                <Skeleton className="mx-auto h-3 w-16" />
+              <TableHead className="w-24 text-center">
+                <Skeleton className="mx-auto h-3 w-14" />
               </TableHead>
-              <TableHead className="text-center">
-                <Skeleton className="mx-auto h-3 w-16" />
+              <TableHead className="w-24 text-center">
+                <Skeleton className="mx-auto h-3 w-14" />
               </TableHead>
-              <TableHead className="text-center">
-                <Skeleton className="mx-auto h-3 w-16" />
+              <TableHead className="w-24 text-center">
+                <Skeleton className="mx-auto h-3 w-14" />
               </TableHead>
               {showHotComments ? (
                 <TableHead className="text-left">
@@ -581,19 +666,21 @@ function VideoList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-28 text-center">发布时间</TableHead>
+              <TableHead className="w-16 text-center">序号</TableHead>
+              <TableHead className="w-32 text-center">发布时间</TableHead>
               <TableHead className="max-w-[260px] text-center">视频标题</TableHead>
-              <TableHead className="text-center">观看</TableHead>
-              <TableHead className="text-center">点赞</TableHead>
-              <TableHead className="text-center">评论</TableHead>
+              <TableHead className="w-24 text-center">观看</TableHead>
+              <TableHead className="w-24 text-center">点赞</TableHead>
+              <TableHead className="w-24 text-center">评论</TableHead>
               {showHotComments ? (
                 <TableHead className="max-w-[320px] text-center">热门评论</TableHead>
               ) : null}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedVideos.map((video) => {
+            {paginatedVideos.map((video, index) => {
               if (!channelMetadata) return null;
+              const absoluteIndex = (currentPage - 1) * pageSize + index + 1;
               let hotCommentCell: JSX.Element | null = null;
               if (showHotComments) {
                 const commentTitle = video.topComment?.trim() ?? "";
@@ -640,7 +727,10 @@ function VideoList({
 
               return (
                 <TableRow key={video.id}>
-                  <TableCell className="w-28 whitespace-nowrap text-center text-sm text-muted-foreground">
+                  <TableCell className="w-16 text-center text-sm text-muted-foreground">
+                    {absoluteIndex}
+                  </TableCell>
+                  <TableCell className="w-32 whitespace-nowrap text-center text-sm text-muted-foreground">
                     {formatPublishedAt(video.publishedAt)}
                   </TableCell>
                   <TableCell className="max-w-[260px]">
@@ -701,13 +791,13 @@ function VideoList({
                       ) : null}
                     </div>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="w-24 text-center">
                     {formatCompactCount(video.viewCount)}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="w-24 text-center">
                     {formatCompactCount(video.likeCount)}
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="w-24 text-center">
                     {formatCompactCount(video.commentCount)}
                   </TableCell>
                   {hotCommentCell}

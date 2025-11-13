@@ -1,7 +1,13 @@
 import { LoginForm } from "@/components/login-form";
 import { apiFetch, postJson, ApiError } from "@/lib/api-client";
 import { useAuth, type AuthSessionPayload } from "@/contexts/AuthContext";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 
 function Login() {
@@ -37,6 +43,16 @@ function Login() {
       navigate(location.pathname, { replace: true, state: null });
     }
   }, [registrationState, navigate, location.pathname]);
+
+  const getNetworkErrorMessage = useCallback((error: unknown) => {
+    if (
+      error instanceof Error &&
+      /Failed to fetch|NetworkError|Load failed/i.test(error.message)
+    ) {
+      return "服务器开小差了，请稍后再试";
+    }
+    return null;
+  }, []);
 
   const handleLogin = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -84,7 +100,10 @@ function Login() {
         form.reset();
         navigate("/home", { replace: true });
       } catch (caughtError) {
-        if (caughtError instanceof ApiError) {
+        const networkMessage = getNetworkErrorMessage(caughtError);
+        if (networkMessage) {
+          setError(networkMessage);
+        } else if (caughtError instanceof ApiError) {
           const message =
             caughtError.status === 401
               ? "用户名或密码错误，请重试。"
@@ -99,7 +118,7 @@ function Login() {
         setIsPasswordLoginLoading(false);
       }
     },
-    [isPasswordLoginLoading, navigate, setSession],
+    [getNetworkErrorMessage, isPasswordLoginLoading, navigate, setSession],
   );
 
   const handleGoogleLogin = useCallback(async () => {
@@ -120,7 +139,10 @@ function Login() {
         window.location.assign(authorizationUrl);
       }
     } catch (caughtError) {
-      if (caughtError instanceof ApiError) {
+      const networkMessage = getNetworkErrorMessage(caughtError);
+      if (networkMessage) {
+        setError(networkMessage);
+      } else if (caughtError instanceof ApiError) {
         setError(caughtError.message);
       } else if (caughtError instanceof Error) {
         setError(caughtError.message);
@@ -129,7 +151,7 @@ function Login() {
       }
       setIsGoogleLoginLoading(false);
     }
-  }, []);
+  }, [getNetworkErrorMessage]);
 
   return (
     <div className="flex w-full items-center justify-center p-6 md:p-10">

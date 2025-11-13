@@ -1,4 +1,5 @@
 import * as ButtonPrimitive from "@/components/ui/button";
+import { DataErrorState } from "@/components/ui/data-error-state";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
@@ -7,8 +8,9 @@ import type {
   VideoTableRow,
 } from "@/features/home/search-input";
 import YouTubeEmbed from "@/components/video/youtube-embed";
-import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
+import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { getYoutubeApiKey } from "@/lib/config";
+import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
 import { ArrowLeft, ExternalLink, MessageCircle, ThumbsUp } from "lucide-react";
 import { ArrowLineUp, Textbox } from "@phosphor-icons/react";
 import {
@@ -19,7 +21,6 @@ import {
 import type { FormEvent, JSX } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import {
@@ -32,12 +33,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ExportFormat } from "@/lib/video-transcription-api";
@@ -258,6 +256,9 @@ function DetailPage(): JSX.Element {
     useState<ExportFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [includeHeader, setIncludeHeader] = useState(false);
+  const searchStateSnapshot = (state?.searchState as ChannelVideosState | null) ?? null;
+  const isSubscribed = searchStateSnapshot?.isSubscribed ?? null;
+  const isSubscriptionLoading = searchStateSnapshot?.isSubscriptionLoading ?? false;
 
   const { createTask: enqueueTranscriptionTask } = useTranscriptionTasks();
 
@@ -686,49 +687,70 @@ function DetailPage(): JSX.Element {
     </div>
   );
 
-  const renderChannelSnapshot = () => (
-    <div className="rounded-lg border bg-background p-6 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-4">
-          {channelSnapshot?.thumbnailUrl ? (
-            <img
-              src={channelSnapshot.thumbnailUrl}
-              alt={`${channelSnapshot.title} 头像`}
-              className="h-16 w-16 rounded-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
-              {channelSnapshot?.title?.[0] ?? "?"}
+  const renderChannelSnapshot = () => {
+    const subscriptionLabel = isSubscriptionLoading
+      ? "查询中..."
+      : isSubscribed
+        ? "已订阅"
+        : "订阅";
+    const subscriptionVariant = isSubscribed ? "secondary" : "default";
+    const showSubscriptionButton = Boolean(videoDetail?.channelId);
+
+    return (
+      <div className="rounded-lg border bg-background p-6 shadow-sm">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-4">
+            {channelSnapshot?.thumbnailUrl ? (
+              <img
+                src={channelSnapshot.thumbnailUrl}
+                alt={`${channelSnapshot.title} 头像`}
+                className="h-16 w-16 rounded-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-muted-foreground">
+                {channelSnapshot?.title?.[0] ?? "?"}
+              </div>
+            )}
+            <div className="space-y-1">
+              <h3 className="text-lg font-semibold">
+                {channelSnapshot?.title ?? "频道详情"}
+              </h3>
+              {channelSnapshot?.handle ? (
+                <p className="text-sm text-muted-foreground">
+                  {channelSnapshot.handle}
+                </p>
+              ) : null}
             </div>
-          )}
-          <div className="space-y-1">
-            <h3 className="text-lg font-semibold">
-              {channelSnapshot?.title ?? "频道详情"}
-            </h3>
-            {channelSnapshot?.handle ? (
-              <p className="text-sm text-muted-foreground">
-                {channelSnapshot.handle}
-              </p>
+          </div>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            {showSubscriptionButton ? (
+              <UIButton
+                type="button"
+                variant={subscriptionVariant}
+                className="w-full sm:w-auto"
+                aria-pressed={isSubscribed ?? false}
+              >
+                {subscriptionLabel}
+              </UIButton>
             ) : null}
+            <UIButton
+              type="button"
+              variant="outline"
+              asChild
+              className="w-full gap-2 sm:w-auto"
+            >
+              <a
+                href={`https://www.youtube.com/${channelSnapshot?.handle ?? ""}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                浏览频道
+                <ExternalLink className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </UIButton>
           </div>
         </div>
-        <UIButton
-          type="button"
-          variant="outline"
-          asChild
-          className="w-full gap-2 sm:w-auto"
-        >
-          <a
-            href={`https://www.youtube.com/${channelSnapshot?.handle ?? ""}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            浏览频道
-            <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
-        </UIButton>
-      </div>
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
         <div>
           <p className="text-xs uppercase text-muted-foreground">订阅数</p>
@@ -749,13 +771,14 @@ function DetailPage(): JSX.Element {
           </p>
         </div>
       </div>
-      {channelSnapshot?.description ? (
-        <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
-          {channelSnapshot.description}
-        </p>
-      ) : null}
-    </div>
-  );
+        {channelSnapshot?.description ? (
+          <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+            {channelSnapshot.description}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderComments = () => {
     if (commentsLoading) {
@@ -854,6 +877,25 @@ function DetailPage(): JSX.Element {
             </TooltipContent>
           </Tooltip>
         ) : null}
+        {showScrollTop ? (
+          <Tooltip delayDuration={200}>
+            <TooltipTrigger asChild>
+              <UIButton
+                type="button"
+                size="icon"
+                className={actionButtonClasses}
+                aria-label="返回上一页"
+                onClick={handleBack}
+                variant="plain"
+              >
+                <ArrowLeft size={32} />
+              </UIButton>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center">
+              返回上一页
+            </TooltipContent>
+          </Tooltip>
+        ) : null}
         <Tooltip delayDuration={200}>
           <TooltipTrigger asChild>
             <UIButton
@@ -912,23 +954,23 @@ function DetailPage(): JSX.Element {
             </div>
 
             {error ? (
-              <div className="space-y-4 rounded-lg border bg-background p-6 text-center shadow-sm">
-                <p className="text-base text-muted-foreground">{error}</p>
-                <div className="flex flex-wrap justify-center gap-3">
+              <div className="space-y-4">
+                <DataErrorState
+                  className="border border-dashed border-muted-foreground/60 bg-background/90"
+                  title="无法加载视频详情"
+                  description={error}
+                  actionLabel="重新加载"
+                  onRetry={() => {
+                    setRefreshCounter((previous) => previous + 1);
+                  }}
+                />
+                <div className="flex justify-center">
                   <UIButton
                     type="button"
                     variant="outline"
                     onClick={handleBack}
                   >
                     返回上一页
-                  </UIButton>
-                  <UIButton
-                    type="button"
-                    onClick={() => {
-                      setRefreshCounter((previous) => previous + 1);
-                    }}
-                  >
-                    重试
                   </UIButton>
                 </div>
               </div>
@@ -973,77 +1015,90 @@ function DetailPage(): JSX.Element {
           </DialogHeader>
 
           <form className="space-y-6" onSubmit={handleTranscriptionConfirm}>
-            <div className="space-y-3">
-              <div className="space-y-2">
-                <Label htmlFor="export-format">导出格式</Label>
-                <Select
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <Label className="text-sm font-medium">导出格式</Label>
+                <RadioGroup
                   value={selectedExportFormat}
-                  onValueChange={(value) =>
+                  onValueChange={(value: string) =>
                     setSelectedExportFormat(value as ExportFormat)
                   }
                   disabled={isCreatingTranscription}
+                  className="space-y-3"
                 >
-                  <SelectTrigger
-                    id="export-format"
-                    className="custom-select-trigger flex h-12 w-full items-center text-left text-base"
-                  >
-                    <SelectValue placeholder="请选择导出格式" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
-                      <SelectItem
-                        key={option.value}
+                  {TRANSCRIPTION_EXPORT_FORMATS.map((option) => (
+                    <div
+                      key={option.value}
+                      className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                    >
+                      <RadioGroupItem
                         value={option.value}
-                        textValue={option.label}
+                        id={option.value}
+                        className="mt-0.5"
+                      />
+                      <Label
+                        htmlFor={option.value}
+                        className="flex-1 cursor-pointer space-y-0.5"
                       >
-                        <div className="flex flex-col">
-                          <span>{option.label}</span>
-                          <span className="text-xs text-muted-foreground">
-                            {option.description}
-                          </span>
+                        <div className="font-medium text-sm">{option.label}</div>
+                        <div className="text-xs leading-relaxed text-muted-foreground">
+                          {option.description}
                         </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="include-timestamps">包含时间戳</Label>
-                  <p className="text-xs text-muted-foreground">
-                    在每段文本前保留字幕时间码，便于定位。
-                  </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
+                  <div className="flex-1 space-y-0.5 pr-4">
+                    <Label
+                      htmlFor="include-timestamps"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      包含时间戳
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      在每段文本前保留字幕时间码，便于定位。
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-timestamps"
+                    checked={includeTimestamps}
+                    onCheckedChange={setIncludeTimestamps}
+                    disabled={isCreatingTranscription}
+                  />
                 </div>
-                <Switch
-                  id="include-timestamps"
-                  checked={includeTimestamps}
-                  onCheckedChange={setIncludeTimestamps}
-                  disabled={isCreatingTranscription}
-                />
-              </div>
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div className="space-y-1">
-                  <Label htmlFor="include-header">包含头部信息</Label>
-                  <p className="text-xs text-muted-foreground">
-                    在开头附上视频标题、链接等元信息。
-                  </p>
+                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
+                  <div className="flex-1 space-y-0.5 pr-4">
+                    <Label
+                      htmlFor="include-header"
+                      className="text-sm font-medium cursor-pointer"
+                    >
+                      包含头部信息
+                    </Label>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      在开头附上视频标题、链接等元信息。
+                    </p>
+                  </div>
+                  <Switch
+                    id="include-header"
+                    checked={includeHeader}
+                    onCheckedChange={setIncludeHeader}
+                    disabled={isCreatingTranscription}
+                  />
                 </div>
-                <Switch
-                  id="include-header"
-                  checked={includeHeader}
-                  onCheckedChange={setIncludeHeader}
-                  disabled={isCreatingTranscription}
-                />
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2 sm:gap-0">
               <DialogClose asChild>
                 <UIButton
                   type="button"
                   variant="outline"
                   disabled={isCreatingTranscription}
+                  className="min-w-[100px]"
                 >
                   取消
                 </UIButton>
@@ -1054,7 +1109,10 @@ function DetailPage(): JSX.Element {
                 className="min-w-[120px]"
               >
                 {isCreatingTranscription ? (
-                  <Spinner className="h-4 w-4 text-primary-foreground" />
+                  <>
+                    <Spinner className="mr-2 h-4 w-4 text-primary-foreground" />
+                    创建中...
+                  </>
                 ) : (
                   "开始转文字"
                 )}

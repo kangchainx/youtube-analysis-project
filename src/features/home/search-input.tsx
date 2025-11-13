@@ -7,6 +7,7 @@ import {
   videosList,
 } from "@/lib/youtube";
 import { getYoutubeApiKey } from "@/lib/config";
+import { apiFetch, ApiError } from "@/lib/api-client";
 import { Search } from "lucide-react";
 import {
   type ChangeEvent,
@@ -18,6 +19,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router-dom";
 
 type ChannelsListItem = {
   id?: string;
@@ -132,6 +134,8 @@ export type ChannelVideosState = {
   videos: VideoTableRow[];
   error: string | null;
   isLoading: boolean;
+  isSubscribed: boolean | null;
+  isSubscriptionLoading: boolean;
 };
 
 export type ChannelSuggestion = {
@@ -168,6 +172,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
     }: SearchInputProps,
     ref,
   ) {
+    const navigate = useNavigate();
     const [value, setValue] = useState("");
     const [isOpen, setIsOpen] = useState(false);
     const containerRef = useRef<HTMLFormElement>(null);
@@ -175,6 +180,50 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
     const lastRequestRef = useRef<{ query: string; channelId?: string } | null>(
       null,
     );
+
+    const extractVideoIdFromUrl = useCallback((url: string): string | null => {
+      const trimmed = url.trim();
+      if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+        return null;
+      }
+
+      try {
+        // 处理各种 YouTube URL 格式
+        // http://www.youtube.com/watch?v=VIDEO_ID
+        // https://www.youtube.com/watch?v=VIDEO_ID
+        // http://www.youtube.com/embed/VIDEO_ID
+        // https://youtu.be/VIDEO_ID
+        // http://youtube.com/watch?v=VIDEO_ID&other=params
+        
+        // 如果包含 youtu.be
+        const youtuBeMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+        if (youtuBeMatch) {
+          return youtuBeMatch[1];
+        }
+
+        // 如果包含 youtube.com/watch?v=
+        const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+        if (watchMatch) {
+          return watchMatch[1];
+        }
+
+        // 如果包含 youtube.com/embed/
+        const embedMatch = trimmed.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+        if (embedMatch) {
+          return embedMatch[1];
+        }
+
+        // 如果包含 youtube.com/v/
+        const vMatch = trimmed.match(/youtube\.com\/v\/([a-zA-Z0-9_-]{11})/);
+        if (vMatch) {
+          return vMatch[1];
+        }
+
+        return null;
+      } catch {
+        return null;
+      }
+    }, []);
 
     const resetChannelVideos = useCallback(() => {
       videosAbortControllerRef.current?.abort();
@@ -187,6 +236,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         videos: [],
         error: null,
         isLoading: false,
+        isSubscribed: null,
+        isSubscriptionLoading: false,
       });
     }, [onChannelVideosUpdate]);
 
@@ -212,6 +263,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           videos: [],
           error: null,
           isLoading: true,
+          isSubscribed: null,
+          isSubscriptionLoading: false,
         };
 
         const pushState = (partial: Partial<ChannelVideosState> = {}) => {
@@ -226,6 +279,28 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           if (!count) return 0;
           const parsed = Number(count);
           return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const fetchSubscriptionStatus = async (channelId: string) => {
+          try {
+            const response = await apiFetch<{ data?: { subscribed?: boolean } }>(
+              `/api/youtube/subscription-status?channel_id=${encodeURIComponent(channelId)}`,
+              { signal: controller.signal },
+            );
+            return typeof response?.data?.subscribed === "boolean"
+              ? response.data.subscribed
+              : null;
+          } catch (subscriptionError) {
+            if (controller.signal.aborted) return null;
+            if (
+              subscriptionError instanceof ApiError &&
+              subscriptionError.status === 401
+            ) {
+              return null;
+            }
+            console.error("Failed to fetch subscription status", subscriptionError);
+            return null;
+          }
         };
 
         try {
@@ -259,6 +334,8 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               videos: [],
               isLoading: false,
               channelId: "",
+              isSubscriptionLoading: false,
+              isSubscribed: null,
             });
             return;
           }
@@ -286,6 +363,15 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
           pushState({
             channelId,
             channelMetadata,
+            isSubscriptionLoading: true,
+            isSubscribed: null,
+          });
+
+          const subscriptionStatus = await fetchSubscriptionStatus(channelId);
+          if (controller.signal.aborted) return;
+          pushState({
+            isSubscribed: subscriptionStatus,
+            isSubscriptionLoading: false,
           });
 
           const playlistMetadata = new Map<
@@ -557,6 +643,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             videos: [],
             channelMetadata: null,
             isLoading: false,
+            isSubscriptionLoading: false,
           });
         } finally {
           if (videosAbortControllerRef.current === controller) {
@@ -630,6 +717,17 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       if (!trimmed) return;
 
       setIsOpen(false);
+
+      // 检查是否以 http:// 或 https:// 开头，如果是，尝试提取视频ID并跳转
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        const videoId = extractVideoIdFromUrl(trimmed);
+        if (videoId) {
+          navigate(`/detail/${videoId}`);
+          return;
+        }
+      }
+
+      // 保持原有逻辑
       if (isGlobalSearchEnabled) {
         void onSearch(trimmed);
         return;
@@ -718,7 +816,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="输入频道ID进行搜索"
+                placeholder="输入频道ID或视频地址进行搜索"
                 className="h-12 rounded-none border-0 bg-transparent pl-11 pr-4 text-base shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
                 value={value}
                 onChange={handleChange}

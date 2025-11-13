@@ -59,6 +59,8 @@ function HomePage() {
       videos: [],
       error: null,
       isLoading: false,
+      isSubscribed: null,
+      isSubscriptionLoading: false,
     });
   const searchInputRef = useRef<SearchInputHandle | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -101,7 +103,14 @@ function HomePage() {
     }
 
     if (restoreSearchState) {
-      setChannelVideosState(restoreSearchState);
+      setChannelVideosState((previous) => ({
+        ...previous,
+        ...restoreSearchState,
+        isSubscribed:
+          restoreSearchState.isSubscribed ?? previous.isSubscribed ?? null,
+        isSubscriptionLoading:
+          restoreSearchState.isSubscriptionLoading ?? false,
+      }));
       const api = searchInputRef.current;
       api?.hydrateLastRequest({
         query:
@@ -408,6 +417,9 @@ function HomePage() {
             onRefresh={handleManualRefresh}
             showHotComments={isHotCommentsEnabled}
             isGlobalSearchEnabled={isGlobalSearchEnabled}
+            onSubscriptionChange={(patch) =>
+              setChannelVideosState((previous) => ({ ...previous, ...patch }))
+            }
           />
         )}
       </div>
