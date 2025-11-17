@@ -1,4 +1,15 @@
 import * as ButtonPrimitive from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { DataErrorState } from "@/components/ui/data-error-state";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -10,8 +21,17 @@ import type {
 import YouTubeEmbed from "@/components/video/youtube-embed";
 import { useTranscriptionTasks } from "@/contexts/TranscriptionTasksContext";
 import { getYoutubeApiKey } from "@/lib/config";
+import { apiFetch, ApiError } from "@/lib/api-client";
 import { channelsList, commentThreadsList, videosList } from "@/lib/youtube";
-import { ArrowLeft, ExternalLink, MessageCircle, ThumbsUp } from "lucide-react";
+import {
+  ArrowLeft,
+  BellMinus,
+  BellPlus,
+  ExternalLink,
+  Loader2,
+  MessageCircle,
+  ThumbsUp,
+} from "lucide-react";
 import { ArrowLineUp, Textbox } from "@phosphor-icons/react";
 import {
   Tooltip,
@@ -32,10 +52,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import type { ExportFormat } from "@/lib/video-transcription-api";
@@ -175,6 +192,11 @@ const TRANSCRIPTION_EXPORT_FORMATS: Array<{
   },
 ];
 
+function isCommentPermissionError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return /commentThreads\.list request failed:\s*403/i.test(error.message);
+}
+
 function safeParseCount(value?: string | number) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (!value) return 0;
@@ -220,19 +242,29 @@ function DetailPage(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
   const { state } = (location as { state?: DetailPageLocationState }) ?? {};
+  const searchStateSnapshot =
+    (state?.searchState as ChannelVideosState | null) ?? null;
 
   const [videoDetail, setVideoDetail] = useState<DetailVideo | null>(() => {
     if (!state?.video) return null;
+    const tags = Array.isArray(state.video.tags)
+      ? state.video.tags.filter((tag): tag is string => Boolean(tag))
+      : [];
     return {
       id: state.video.id,
       title: state.video.title,
-      description: "",
+      description: state.video.description ?? "",
       publishedAt: state.video.publishedAt,
-      duration: "",
-      channelId: "",
-      channelTitle: state?.channel?.title ?? "",
+      duration: state.video.duration ?? "",
+      channelId:
+        state.video.channelId?.trim() ?? searchStateSnapshot?.channelId ?? "",
+      channelTitle:
+        state.video.channelTitle ??
+        state?.channel?.title ??
+        searchStateSnapshot?.channelMetadata?.title ??
+        "",
       thumbnailUrl: state.video.thumbnailUrl,
-      tags: [],
+      tags,
       statistics: {
         viewCount: state.video.viewCount,
         likeCount: state.video.likeCount,
@@ -241,7 +273,9 @@ function DetailPage(): JSX.Element {
     };
   });
   const [channelSnapshot, setChannelSnapshot] =
-    useState<ChannelSnapshot | null>(state?.channel ?? null);
+    useState<ChannelSnapshot | null>(
+      searchStateSnapshot?.channelMetadata ?? state?.channel ?? null,
+    );
   const [topComments, setTopComments] = useState<CommentPreview[]>([]);
   const [commentsLoading, setCommentsLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(!state?.video);
@@ -256,9 +290,18 @@ function DetailPage(): JSX.Element {
     useState<ExportFormat>("txt");
   const [includeTimestamps, setIncludeTimestamps] = useState(false);
   const [includeHeader, setIncludeHeader] = useState(false);
-  const searchStateSnapshot = (state?.searchState as ChannelVideosState | null) ?? null;
-  const isSubscribed = searchStateSnapshot?.isSubscribed ?? null;
-  const isSubscriptionLoading = searchStateSnapshot?.isSubscriptionLoading ?? false;
+  const [subscriptionState, setSubscriptionState] = useState(() => ({
+    isSubscribed: Boolean(searchStateSnapshot?.isSubscribed),
+    isLoading: searchStateSnapshot?.isSubscriptionLoading ?? false,
+  }));
+  const isSubscribed = subscriptionState.isSubscribed;
+  const isSubscriptionLoading = subscriptionState.isLoading;
+  useEffect(() => {
+    setSubscriptionState((previous) => ({
+      ...previous,
+      isSubscribed: Boolean(searchStateSnapshot?.isSubscribed),
+    }));
+  }, [searchStateSnapshot?.isSubscribed]);
 
   const { createTask: enqueueTranscriptionTask } = useTranscriptionTasks();
 
@@ -304,6 +347,70 @@ function DetailPage(): JSX.Element {
     setIsTranscriptionDialogOpen(true);
   };
 
+  const handleChannelSubscribe = async () => {
+    const channelId = videoDetail?.channelId?.trim();
+    if (!channelId || isSubscribed || isSubscriptionLoading) return;
+
+    setSubscriptionState((previous) => ({ ...previous, isLoading: true }));
+    try {
+      await apiFetch("/api/youtube/subscribe", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+      setSubscriptionState({ isSubscribed: true, isLoading: false });
+      toast.success("订阅成功");
+    } catch (caught) {
+      console.error("Subscribe request failed", caught);
+      const message =
+        caught instanceof ApiError
+          ? caught.message || "订阅失败，请稍后重试。"
+          : caught instanceof Error
+            ? caught.message
+            : "订阅失败，请稍后重试。";
+      toast.error(message);
+      setSubscriptionState((previous) => ({ ...previous, isLoading: false }));
+    }
+  };
+
+  const handleChannelUnsubscribe = async () => {
+    const channelId = videoDetail?.channelId?.trim();
+    if (!channelId || !isSubscribed || isSubscriptionLoading) return;
+
+    setSubscriptionState((previous) => ({ ...previous, isLoading: true }));
+    try {
+      const response = await apiFetch<{
+        data?: { channelId?: string; unsubscribed?: boolean };
+      }>("/api/youtube/subscribe", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+      const unsubscribed =
+        typeof response?.data?.unsubscribed === "boolean"
+          ? response.data.unsubscribed
+          : true;
+      setSubscriptionState({ isSubscribed: false, isLoading: false });
+      toast.success(
+        unsubscribed ? "取消订阅成功" : "尚未订阅该频道，已同步状态。",
+      );
+    } catch (caught) {
+      console.error("Unsubscribe request failed", caught);
+      const message =
+        caught instanceof ApiError
+          ? caught.message || "取消订阅失败，请稍后重试。"
+          : caught instanceof Error
+            ? caught.message
+            : "取消订阅失败，请稍后重试。";
+      toast.error(message);
+      setSubscriptionState((previous) => ({ ...previous, isLoading: false }));
+    }
+  };
+
   const handleTranscriptionConfirm = async (
     event: FormEvent<HTMLFormElement>,
   ) => {
@@ -347,97 +454,160 @@ function DetailPage(): JSX.Element {
     }
   };
 
+  const buildDetailFromVideoRow = (row: VideoTableRow): DetailVideo => {
+    const tags = Array.isArray(row.tags)
+      ? row.tags.filter((tag): tag is string => Boolean(tag))
+      : [];
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description ?? "",
+      publishedAt: row.publishedAt,
+      duration: row.duration ?? "",
+      channelId: row.channelId ?? searchStateSnapshot?.channelId ?? "",
+      channelTitle:
+        row.channelTitle ??
+        searchStateSnapshot?.channelMetadata?.title ??
+        state?.channel?.title ??
+        "",
+      thumbnailUrl: row.thumbnailUrl,
+      tags,
+      statistics: {
+        viewCount: row.viewCount,
+        likeCount: row.likeCount,
+        commentCount: row.commentCount,
+      },
+    };
+  };
+
   useEffect(() => {
-    const resolvedVideoId = videoId ?? "";
-    if (!resolvedVideoId) return;
     const controller = new AbortController();
-    async function fetchDetails() {
-      try {
-        setIsLoading(true);
-        setError(null);
+    const resolvedVideoId = (videoId ?? "").trim();
+    if (!resolvedVideoId) {
+      setError("缺少视频标识，无法加载详情。");
+      return () => controller.abort();
+    }
+
+    const loadFromLocalState = (targetVideoId: string): VideoTableRow | null => {
+      const candidateFromState =
+        state?.video?.source === "local" && state.video.id === targetVideoId
+          ? state.video
+          : null;
+      const candidateFromSnapshot =
+        searchStateSnapshot?.videos?.find(
+          (video) => video.id === targetVideoId && video.source === "local",
+        ) ?? null;
+      const localVideo = candidateFromState ?? candidateFromSnapshot;
+      if (!localVideo) return null;
+
+      const channelMeta =
+        searchStateSnapshot?.channelMetadata ?? state?.channel ?? null;
+      if (channelMeta) {
+        setChannelSnapshot((previous) => previous ?? { ...channelMeta });
+      }
+
+      setVideoDetail(buildDetailFromVideoRow(localVideo));
+      setIsLoading(false);
+      return localVideo;
+    };
+
+    async function fetchDetails(targetVideoId: string) {
+      setIsLoading(true);
+      setCommentsLoading(true);
+      setError(null);
+
+      const cachedVideo = loadFromLocalState(targetVideoId);
+      if (cachedVideo) {
         setCommentsLoading(true);
+      }
 
+      try {
         const apiKey = await getYoutubeApiKey();
-        if (controller.signal.aborted) return;
+        const signal = controller.signal;
 
-        const videoResponse = await videosList({
-          params: {
-            part: "snippet,statistics,contentDetails",
-            id: resolvedVideoId,
-            key: apiKey,
-          },
-          signal: controller.signal,
-        });
-
-        const videoItems = (videoResponse?.items ?? []) as VideosListItem[];
-        const [firstVideo] = videoItems;
-        if (!firstVideo) {
-          throw new Error("未找到该视频");
-        }
-
-        const snippet = firstVideo.snippet ?? {};
-        const stats = firstVideo.statistics ?? {};
-        const contentDetails = firstVideo.contentDetails ?? {};
-        const detail: DetailVideo = {
-          id: resolvedVideoId,
-          title: snippet.title?.trim() || "未命名视频",
-          description: snippet.description ?? "",
-          publishedAt: snippet.publishedAt ?? "",
-          duration: contentDetails.duration ?? "",
-          channelId: snippet.channelId ?? "",
-          channelTitle: snippet.channelTitle ?? state?.channel?.title ?? "",
-          thumbnailUrl:
-            snippet.thumbnails?.high?.url ??
-            snippet.thumbnails?.medium?.url ??
-            snippet.thumbnails?.standard?.url ??
-            snippet.thumbnails?.default?.url ??
-            state?.video?.thumbnailUrl,
-          tags: (snippet.tags ?? []).slice(0, MAX_TAG_COUNT),
-          statistics: {
-            viewCount: safeParseCount(stats.viewCount),
-            likeCount: safeParseCount(stats.likeCount),
-            commentCount: safeParseCount(stats.commentCount),
-          },
-        };
-
-        if (!controller.signal.aborted) {
-          setVideoDetail(detail);
-        }
-
-        const channelId = detail.channelId;
-        if (channelId) {
-          const channelResponse = await channelsList({
+        if (!cachedVideo) {
+          const videoResponse = await videosList({
             params: {
-              part: "snippet,statistics",
-              id: channelId,
+              part: "snippet,statistics,contentDetails",
+              id: targetVideoId,
               maxResults: 1,
               key: apiKey,
             },
-            signal: controller.signal,
+            signal,
           });
 
-          const channelItems = (channelResponse?.items ??
-            []) as ChannelsListItem[];
-          const [firstChannel] = channelItems;
-          if (firstChannel && !controller.signal.aborted) {
-            const channelSnippet = firstChannel.snippet ?? {};
-            const channelStats = firstChannel.statistics ?? {};
-            setChannelSnapshot({
-              handle: channelSnippet.customUrl
-                ? `@${channelSnippet.customUrl.replace(/^@/, "")}`
-                : (state?.channel?.handle ?? ""),
-              title:
-                channelSnippet.title?.trim() ?? state?.channel?.title ?? "",
-              description:
-                channelSnippet.description ?? state?.channel?.description ?? "",
-              subscriberCount: safeParseCount(channelStats.subscriberCount),
-              videoCount: safeParseCount(channelStats.videoCount),
-              viewCount: safeParseCount(channelStats.viewCount),
-              thumbnailUrl:
-                channelSnippet.thumbnails?.high?.url ??
-                channelSnippet.thumbnails?.medium?.url ??
-                channelSnippet.thumbnails?.default?.url,
+          const videoItems = (videoResponse?.items ?? []) as VideosListItem[];
+          const [firstVideo] = videoItems;
+          if (!firstVideo) {
+            throw new Error("未找到该视频");
+          }
+
+          const snippet = firstVideo.snippet ?? {};
+          const stats = firstVideo.statistics ?? {};
+          const contentDetails = firstVideo.contentDetails ?? {};
+          const detail: DetailVideo = {
+            id: targetVideoId,
+            title: snippet.title?.trim() || "未命名视频",
+            description: snippet.description ?? "",
+            publishedAt: snippet.publishedAt ?? "",
+            duration: contentDetails.duration ?? "",
+            channelId: snippet.channelId ?? "",
+            channelTitle: snippet.channelTitle ?? state?.channel?.title ?? "",
+            thumbnailUrl:
+              snippet.thumbnails?.high?.url ??
+              snippet.thumbnails?.medium?.url ??
+              snippet.thumbnails?.standard?.url ??
+              snippet.thumbnails?.default?.url ??
+              state?.video?.thumbnailUrl,
+            tags: (snippet.tags ?? []).slice(0, MAX_TAG_COUNT),
+            statistics: {
+              viewCount: safeParseCount(stats.viewCount),
+              likeCount: safeParseCount(stats.likeCount),
+              commentCount: safeParseCount(stats.commentCount),
+            },
+          };
+
+          if (!controller.signal.aborted) {
+            setVideoDetail(detail);
+          }
+
+          const channelId = detail.channelId;
+          if (channelId) {
+            const channelResponse = await channelsList({
+              params: {
+                part: "snippet,statistics",
+                id: channelId,
+                maxResults: 1,
+                key: apiKey,
+              },
+              signal: controller.signal,
             });
+
+            const channelItems = (channelResponse?.items ??
+              []) as ChannelsListItem[];
+            const [firstChannel] = channelItems;
+            if (firstChannel && !controller.signal.aborted) {
+              const channelSnippet = firstChannel.snippet ?? {};
+              const channelStats = firstChannel.statistics ?? {};
+              setChannelSnapshot({
+                handle: channelSnippet.customUrl
+                  ? `@${channelSnippet.customUrl.replace(/^@/, "")}`
+                  : (state?.channel?.handle ?? ""),
+                title:
+                  channelSnippet.title?.trim() ?? state?.channel?.title ?? "",
+                description:
+                  channelSnippet.description ??
+                  state?.channel?.description ??
+                  "",
+                subscriberCount: safeParseCount(channelStats.subscriberCount),
+                videoCount: safeParseCount(channelStats.videoCount),
+                viewCount: safeParseCount(channelStats.viewCount),
+                thumbnailUrl:
+                  channelSnippet.thumbnails?.high?.url ??
+                  channelSnippet.thumbnails?.medium?.url ??
+                  channelSnippet.thumbnails?.default?.url,
+              });
+            }
           }
         }
 
@@ -445,44 +615,55 @@ function DetailPage(): JSX.Element {
           setIsLoading(false);
         }
 
-        const commentResponse = await commentThreadsList({
-          params: {
-            part: "snippet",
-            videoId: resolvedVideoId,
-            maxResults: MAX_COMMENT_COUNT,
-            order: "relevance",
-            textFormat: "plainText",
-            key: apiKey,
-          },
-          signal: controller.signal,
-        });
+        try {
+          const commentResponse = await commentThreadsList({
+            params: {
+              part: "snippet",
+              videoId: targetVideoId,
+              maxResults: MAX_COMMENT_COUNT,
+              order: "relevance",
+              textFormat: "plainText",
+              key: apiKey,
+            },
+            signal: controller.signal,
+          });
 
-        const commentItems = (commentResponse?.items ??
-          []) as CommentThreadsListItem[];
-        if (!controller.signal.aborted) {
-          const normalizedComments = commentItems
-            .map((thread) => {
-              const topLevel = thread.snippet?.topLevelComment;
-              const commentSnippet = topLevel?.snippet;
-              if (!topLevel || !commentSnippet) return null;
-              const text =
-                commentSnippet.textOriginal?.trim() ??
-                commentSnippet.textDisplay?.trim() ??
-                "";
-              if (!text) return null;
-              return {
-                id: topLevel.id ?? "",
-                author: commentSnippet.authorDisplayName ?? "匿名用户",
-                text,
-                likeCount: commentSnippet.likeCount ?? 0,
-                replyCount: thread.snippet?.totalReplyCount ?? 0,
-                publishedAt: commentSnippet.publishedAt ?? "",
-              };
-            })
-            .filter((item): item is CommentPreview => Boolean(item));
+          const commentItems = (commentResponse?.items ??
+            []) as CommentThreadsListItem[];
+          if (!controller.signal.aborted) {
+            const normalizedComments = commentItems
+              .map((thread) => {
+                const topLevel = thread.snippet?.topLevelComment;
+                const commentSnippet = topLevel?.snippet;
+                if (!topLevel || !commentSnippet) return null;
+                const text =
+                  commentSnippet.textOriginal?.trim() ??
+                  commentSnippet.textDisplay?.trim() ??
+                  "";
+                if (!text) return null;
+                return {
+                  id: topLevel.id ?? "",
+                  author: commentSnippet.authorDisplayName ?? "匿名用户",
+                  text,
+                  likeCount: commentSnippet.likeCount ?? 0,
+                  replyCount: thread.snippet?.totalReplyCount ?? 0,
+                  publishedAt: commentSnippet.publishedAt ?? "",
+                };
+              })
+              .filter((item): item is CommentPreview => Boolean(item));
 
-          setTopComments(normalizedComments);
-          setCommentsLoading(false);
+            setTopComments(normalizedComments);
+            setCommentsLoading(false);
+          }
+        } catch (commentError) {
+          if (controller.signal.aborted) return;
+          if (isCommentPermissionError(commentError)) {
+            console.warn("Skipping commentThreads error:", commentError);
+            setTopComments([]);
+            setCommentsLoading(false);
+          } else {
+            throw commentError;
+          }
         }
       } catch (caught) {
         if (controller.signal.aborted) return;
@@ -493,10 +674,16 @@ function DetailPage(): JSX.Element {
       }
     }
 
-    fetchDetails();
+    void fetchDetails(resolvedVideoId);
 
     return () => controller.abort();
-  }, [refreshCounter, state?.channel, state?.video, videoId]);
+  }, [
+    refreshCounter,
+    searchStateSnapshot,
+    state?.channel,
+    state?.video,
+    videoId,
+  ]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -688,13 +875,73 @@ function DetailPage(): JSX.Element {
   );
 
   const renderChannelSnapshot = () => {
+    const isChannelSubscribed = Boolean(isSubscribed);
     const subscriptionLabel = isSubscriptionLoading
-      ? "查询中..."
-      : isSubscribed
-        ? "已订阅"
+      ? "处理中..."
+      : isChannelSubscribed
+        ? "取消订阅"
         : "订阅";
-    const subscriptionVariant = isSubscribed ? "secondary" : "default";
     const showSubscriptionButton = Boolean(videoDetail?.channelId);
+    const subscriptionIcon = isSubscriptionLoading ? (
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+    ) : isChannelSubscribed ? (
+      <BellMinus className="h-4 w-4" aria-hidden="true" />
+    ) : (
+      <BellPlus className="h-4 w-4" aria-hidden="true" />
+    );
+    const subscriptionButton = !showSubscriptionButton
+      ? null
+      : isChannelSubscribed ? (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <UIButton
+                type="button"
+                variant="destructive"
+                className="w-full gap-2 sm:w-auto"
+                disabled={isSubscriptionLoading}
+                aria-pressed={isChannelSubscribed}
+              >
+                {subscriptionIcon}
+                {subscriptionLabel}
+              </UIButton>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>取消订阅该频道？</AlertDialogTitle>
+                <AlertDialogDescription>
+                  取消后将无法接收该频道的更新通知，确认继续吗？
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>保持订阅</AlertDialogCancel>
+                <AlertDialogAction
+                  type="button"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    void handleChannelUnsubscribe();
+                  }}
+                  disabled={isSubscriptionLoading}
+                >
+                  确认取消
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : (
+          <UIButton
+            type="button"
+            variant="default"
+            className="w-full gap-2 sm:w-auto"
+            disabled={isSubscriptionLoading}
+            onClick={() => {
+              void handleChannelSubscribe();
+            }}
+            aria-pressed={false}
+          >
+            {subscriptionIcon}
+            {subscriptionLabel}
+          </UIButton>
+        );
 
     return (
       <div className="rounded-lg border bg-background p-6 shadow-sm">
@@ -724,16 +971,7 @@ function DetailPage(): JSX.Element {
             </div>
           </div>
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
-            {showSubscriptionButton ? (
-              <UIButton
-                type="button"
-                variant={subscriptionVariant}
-                className="w-full sm:w-auto"
-                aria-pressed={isSubscribed ?? false}
-              >
-                {subscriptionLabel}
-              </UIButton>
-            ) : null}
+            {subscriptionButton}
             <UIButton
               type="button"
               variant="outline"
@@ -751,26 +989,26 @@ function DetailPage(): JSX.Element {
             </UIButton>
           </div>
         </div>
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <div>
-          <p className="text-xs uppercase text-muted-foreground">订阅数</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatChannelMetric(channelSnapshot?.subscriberCount ?? 0)}
-          </p>
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">订阅数</p>
+            <p className="mt-1 text-xl font-semibold">
+              {formatChannelMetric(channelSnapshot?.subscriberCount ?? 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">总播放量</p>
+            <p className="mt-1 text-xl font-semibold">
+              {formatChannelMetric(channelSnapshot?.viewCount ?? 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">视频总数</p>
+            <p className="mt-1 text-xl font-semibold">
+              {formatCount(channelSnapshot?.videoCount ?? 0)}
+            </p>
+          </div>
         </div>
-        <div>
-          <p className="text-xs uppercase text-muted-foreground">总播放量</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatChannelMetric(channelSnapshot?.viewCount ?? 0)}
-          </p>
-        </div>
-        <div>
-          <p className="text-xs uppercase text-muted-foreground">视频总数</p>
-          <p className="mt-1 text-xl font-semibold">
-            {formatCount(channelSnapshot?.videoCount ?? 0)}
-          </p>
-        </div>
-      </div>
         {channelSnapshot?.description ? (
           <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
             {channelSnapshot.description}
@@ -1040,7 +1278,9 @@ function DetailPage(): JSX.Element {
                         htmlFor={option.value}
                         className="flex-1 cursor-pointer space-y-0.5"
                       >
-                        <div className="font-medium text-sm">{option.label}</div>
+                        <div className="font-medium text-sm">
+                          {option.label}
+                        </div>
                         <div className="text-xs leading-relaxed text-muted-foreground">
                           {option.description}
                         </div>

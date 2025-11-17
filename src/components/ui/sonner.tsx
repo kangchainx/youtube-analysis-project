@@ -4,22 +4,25 @@ import {
   Loader2Icon,
   OctagonXIcon,
   TriangleAlertIcon,
-} from "lucide-react"
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
+} from "lucide-react";
+import { useTheme } from "next-themes";
+import { Toaster as Sonner, type ToasterProps } from "sonner";
 
 const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const { theme = "system" } = useTheme();
 
   const baseToastOptions: ToasterProps["toastOptions"] = {
     style: {
       marginInline: "auto",
+      width: "max-content",
+      minWidth: "120px",
+      maxWidth: "min(420px, calc(100vw - 32px))",
+      position: "static",
     },
     classNames: {
       toast:
-        "mx-auto flex w-full max-w-[420px] items-start gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-4 text-sm shadow-lg shadow-emerald-100/80 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
-      content:
-        "flex-1 text-sm leading-relaxed text-emerald-800 dark:text-emerald-100",
+        "group pointer-events-auto mx-auto inline-flex min-w-[120px] max-w-[420px] items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm shadow-lg shadow-emerald-100/80 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
+      content: "text-sm leading-relaxed text-emerald-800 dark:text-emerald-100",
       icon: "mt-0.5 shrink-0 text-emerald-500 dark:text-emerald-300",
       closeButton:
         "text-emerald-500 transition hover:text-emerald-600 dark:text-emerald-200 dark:hover:text-emerald-50",
@@ -28,7 +31,7 @@ const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
       cancelButton:
         "text-xs font-medium text-muted-foreground hover:text-foreground",
     },
-  }
+  };
 
   const mergedToastOptions: ToasterProps["toastOptions"] = {
     ...baseToastOptions,
@@ -41,7 +44,7 @@ const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
       ...baseToastOptions?.style,
       ...toastOptions?.style,
     },
-  }
+  };
 
   return (
     <Sonner
@@ -60,12 +63,13 @@ const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          "--width": "max-content",
         } as React.CSSProperties
       }
       toastOptions={mergedToastOptions}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

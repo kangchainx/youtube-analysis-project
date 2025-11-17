@@ -43,6 +43,7 @@
 
 :root {
   --radius: 0.625rem;
+  --toast-horizontal-offset: 0px;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -137,11 +138,18 @@
   }
 
   .progress-message-text--scroll {
-    animation: progress-message-scroll 10s linear infinite,
+    animation:
+      progress-message-scroll 10s linear infinite,
       progress-message-blink 1.6s ease-in-out infinite;
     display: inline-flex;
     min-width: 100%;
   }
+}
+
+.toaster[data-sonner-toaster][data-x-position="center"] {
+  transform: translateX(
+    calc(-50% + var(--toast-horizontal-offset, 0px))
+  ) !important;
 }
 
 @keyframes testimonials-marquee {

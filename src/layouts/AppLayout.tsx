@@ -31,9 +31,8 @@ function AppLayout() {
   const mainMinHeightClass = user
     ? "min-h-[calc(100vh-3.5rem)]"
     : "min-h-screen";
-  const [profileNavigationState, setProfileNavigationState] = useState<
-    ProfileNavigationState
-  >({ from: location.pathname });
+  const [profileNavigationState, setProfileNavigationState] =
+    useState<ProfileNavigationState>({ from: location.pathname });
 
   useEffect(() => {
     setProfileNavigationState({ from: location.pathname });
