@@ -1,5 +1,21 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import {
   Empty,
   EmptyDescription,
@@ -21,6 +37,7 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -39,8 +56,8 @@ import { DataErrorState } from "@/components/ui/data-error-state";
 import type { ChannelVideosState } from "@/features/home/search-input";
 import { exportVideosToCsv, exportVideosToExcel } from "@/lib/export-utils";
 import {
+  BellMinus,
   BellPlus,
-  Check,
   Download,
   FileSpreadsheet,
   FileText,
@@ -53,7 +70,7 @@ import {
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { toast } from "sonner";
-import type { JSX, MouseEvent } from "react";
+import type { JSX, MouseEvent, ChangeEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -92,6 +109,7 @@ function VideoList({
   const [viewMode, setViewMode] = useState<"table" | "card">(
     getInitialViewMode,
   );
+  const [titleFilter, setTitleFilter] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -157,11 +175,18 @@ function VideoList({
 
   const isCardView = viewMode === "card";
   const pageSize = PAGE_SIZE;
-  const totalPages = Math.ceil(videos.length / pageSize);
+  const filteredVideos = useMemo(() => {
+    const keyword = titleFilter.trim().toLowerCase();
+    if (!keyword) return videos;
+    return videos.filter((video) =>
+      video.title?.toLowerCase().includes(keyword),
+    );
+  }, [titleFilter, videos]);
+  const totalPages = Math.ceil(filteredVideos.length / pageSize);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [channelName, videos]);
+  }, [channelName, videos, titleFilter]);
 
   useEffect(() => {
     if (totalPages === 0) {
@@ -174,10 +199,10 @@ function VideoList({
   }, [totalPages]);
 
   const paginatedVideos = useMemo(() => {
-    if (videos.length === 0) return [];
+    if (filteredVideos.length === 0) return [];
     const startIndex = (currentPage - 1) * pageSize;
-    return videos.slice(startIndex, startIndex + pageSize);
-  }, [currentPage, pageSize, videos]);
+    return filteredVideos.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, pageSize, filteredVideos]);
 
   const searchStateSnapshot = useMemo(
     () => channelVideosState,
@@ -237,6 +262,55 @@ function VideoList({
       toast.error(message);
       onSubscriptionChange?.({ isSubscriptionLoading: false });
     }
+  };
+
+  const handleUnsubscribe = async () => {
+    const channelId = channelVideosState.channelId?.trim();
+    if (
+      !channelId ||
+      !channelVideosState.isSubscribed ||
+      channelVideosState.isSubscriptionLoading
+    ) {
+      return;
+    }
+
+    onSubscriptionChange?.({ isSubscriptionLoading: true });
+    try {
+      const response = await apiFetch<{
+        data?: { channelId?: string; unsubscribed?: boolean };
+      }>("/api/youtube/subscribe", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ channel_id: channelId }),
+      });
+      const unsubscribed =
+        typeof response?.data?.unsubscribed === "boolean"
+          ? response.data.unsubscribed
+          : true;
+      onSubscriptionChange?.({
+        isSubscribed: false,
+        isSubscriptionLoading: false,
+      });
+      toast.success(
+        unsubscribed ? "取消订阅成功" : "尚未订阅该频道，已同步状态。",
+      );
+    } catch (caught) {
+      console.error("Unsubscribe request failed", caught);
+      const message =
+        caught instanceof ApiError
+          ? caught.message || "取消订阅失败，请稍后重试。"
+          : caught instanceof Error
+            ? caught.message
+            : "取消订阅失败，请稍后重试。";
+      toast.error(message);
+      onSubscriptionChange?.({ isSubscriptionLoading: false });
+    }
+  };
+
+  const handleTitleFilterChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setTitleFilter(event.target.value);
   };
 
   const paginationItems = useMemo(() => {
@@ -350,30 +424,65 @@ function VideoList({
       </div>
     );
 
+    const isSubscribed = Boolean(channelVideosState.isSubscribed);
     const subscriptionLabel = channelVideosState.isSubscriptionLoading
       ? "处理中..."
-      : channelVideosState.isSubscribed
-        ? "已订阅"
+      : isSubscribed
+        ? "取消订阅"
         : "订阅";
-    const subscribeButton = (
+    const subscriptionIcon = channelVideosState.isSubscriptionLoading ? (
+      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+    ) : isSubscribed ? (
+      <BellMinus className="h-4 w-4" aria-hidden="true" />
+    ) : (
+      <BellPlus className="h-4 w-4" aria-hidden="true" />
+    );
+    const subscribeButton = isSubscribed ? (
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 gap-1 px-3 text-xs"
+            variant="destructive"
+            disabled={channelVideosState.isSubscriptionLoading}
+          >
+            {subscriptionIcon}
+            {subscriptionLabel}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>取消订阅该频道？</AlertDialogTitle>
+            <AlertDialogDescription>
+              取消后将无法接收该频道的更新通知，确认继续吗？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>保持订阅</AlertDialogCancel>
+            <AlertDialogAction
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                void handleUnsubscribe();
+              }}
+              disabled={channelVideosState.isSubscriptionLoading}
+            >
+              确认取消
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    ) : (
       <Button
         type="button"
         size="sm"
         className="h-8 gap-1 px-3 text-xs"
-        variant={channelVideosState.isSubscribed ? "secondary" : "default"}
-        disabled={
-          channelVideosState.isSubscriptionLoading ||
-          channelVideosState.isSubscribed
-        }
+        variant="default"
+        disabled={channelVideosState.isSubscriptionLoading}
         onClick={handleSubscribe}
       >
-        {channelVideosState.isSubscriptionLoading ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-        ) : channelVideosState.isSubscribed ? (
-          <Check className="h-4 w-4" aria-hidden="true" />
-        ) : (
-          <BellPlus className="h-4 w-4" aria-hidden="true" />
-        )}
+        {subscriptionIcon}
         {subscriptionLabel}
       </Button>
     );
@@ -430,13 +539,20 @@ function VideoList({
     );
 
     channelSummary = (
-      <div className="mb-4 space-y-2">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-baseline gap-2">
-            <h2 className="text-lg font-semibold">{channelMetadata.title}</h2>
-            <span className="text-sm text-muted-foreground">
-              {channelMetadata.handle}
-            </span>
+      <div className="mb-4 space-y-3">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+          <div className="flex min-w-[240px] flex-1 flex-col gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h2 className="text-lg font-semibold">{channelMetadata.title}</h2>
+              <span className="text-sm text-muted-foreground">
+                {channelMetadata.handle}
+              </span>
+            </div>
+            {channelMetadata.description ? (
+              <p className="text-sm text-muted-foreground">
+                {channelMetadata.description}
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             {viewToggle}
@@ -466,19 +582,38 @@ function VideoList({
             ) : null}
           </div>
         </div>
-        {channelMetadata.description ? (
-          <p className="text-sm text-muted-foreground">
-            {channelMetadata.description}
-          </p>
-        ) : null}
-        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
-          <span>视频数: {formatCompactCount(channelMetadata.videoCount)}</span>
-          <span>
-            订阅数: {formatChannelMetric(channelMetadata.subscriberCount)}
-          </span>
-          <span>
-            总观看次数: {formatChannelMetric(channelMetadata.viewCount)}
-          </span>
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
+            <span>
+              视频数: {formatCompactCount(channelMetadata.videoCount)}
+            </span>
+            <span>
+              订阅数: {formatChannelMetric(channelMetadata.subscriberCount)}
+            </span>
+            <span>
+              总观看次数: {formatChannelMetric(channelMetadata.viewCount)}
+            </span>
+          </div>
+          <div className="flex w-full flex-col gap-1 md:w-[380px]">
+            <div className="relative">
+              <Input
+                value={titleFilter}
+                onChange={handleTitleFilterChange}
+                placeholder="输入视频标题进行筛选"
+                className="h-9 pr-10"
+              />
+              {titleFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setTitleFilter("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground transition hover:bg-muted"
+                  aria-label="清除筛选"
+                >
+                  ×
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -496,53 +631,56 @@ function VideoList({
   const hasChannelMetadata = Boolean(channelMetadata);
   const shouldSkipVideoSection =
     !hasChannelMetadata && error === "Channel or playlist not found";
-  const hasVideoData = hasChannelMetadata && !error && videos.length > 0;
+  const isFiltered = Boolean(titleFilter.trim());
+  const hasVideoData =
+    hasChannelMetadata && !error && filteredVideos.length > 0;
 
-  const pagination = totalPages > 1 ? (
-    <Pagination className="mt-4">
-      <PaginationContent>
-        <PaginationItem>
-          <PaginationPrevious
-            href="#"
-            onClick={handlePreviousPage}
-            aria-disabled={currentPage === 1}
-            className={
-              currentPage === 1 ? "pointer-events-none opacity-50" : undefined
-            }
-          />
-        </PaginationItem>
-        {paginationItems.map((item, index) =>
-          item.type === "ellipsis" ? (
-            <PaginationItem key={`ellipsis-${item.key}-${index}`}>
-              <PaginationEllipsis />
-            </PaginationItem>
-          ) : (
-            <PaginationItem key={item.page}>
-              <PaginationLink
-                href="#"
-                isActive={item.page === currentPage}
-                onClick={(event) => handleDirectPageSelect(event, item.page)}
-              >
-                {item.page}
-              </PaginationLink>
-            </PaginationItem>
-          ),
-        )}
-        <PaginationItem>
-          <PaginationNext
-            href="#"
-            onClick={handleNextPage}
-            aria-disabled={currentPage === totalPages}
-            className={
-              currentPage === totalPages
-                ? "pointer-events-none opacity-50"
-                : undefined
-            }
-          />
-        </PaginationItem>
-      </PaginationContent>
-    </Pagination>
-  ) : null;
+  const pagination =
+    totalPages > 1 ? (
+      <Pagination className="mt-4">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious
+              href="#"
+              onClick={handlePreviousPage}
+              aria-disabled={currentPage === 1}
+              className={
+                currentPage === 1 ? "pointer-events-none opacity-50" : undefined
+              }
+            />
+          </PaginationItem>
+          {paginationItems.map((item, index) =>
+            item.type === "ellipsis" ? (
+              <PaginationItem key={`ellipsis-${item.key}-${index}`}>
+                <PaginationEllipsis />
+              </PaginationItem>
+            ) : (
+              <PaginationItem key={item.page}>
+                <PaginationLink
+                  href="#"
+                  isActive={item.page === currentPage}
+                  onClick={(event) => handleDirectPageSelect(event, item.page)}
+                >
+                  {item.page}
+                </PaginationLink>
+              </PaginationItem>
+            ),
+          )}
+          <PaginationItem>
+            <PaginationNext
+              href="#"
+              onClick={handleNextPage}
+              aria-disabled={currentPage === totalPages}
+              className={
+                currentPage === totalPages
+                  ? "pointer-events-none opacity-50"
+                  : undefined
+              }
+            />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    ) : null;
 
   let bodyContent: JSX.Element | null = null;
   if (shouldSkipVideoSection) {
@@ -668,12 +806,16 @@ function VideoList({
             <TableRow>
               <TableHead className="w-16 text-center">序号</TableHead>
               <TableHead className="w-32 text-center">发布时间</TableHead>
-              <TableHead className="max-w-[260px] text-center">视频标题</TableHead>
+              <TableHead className="max-w-[260px] text-center">
+                视频标题
+              </TableHead>
               <TableHead className="w-24 text-center">观看</TableHead>
               <TableHead className="w-24 text-center">点赞</TableHead>
               <TableHead className="w-24 text-center">评论</TableHead>
               {showHotComments ? (
-                <TableHead className="max-w-[320px] text-center">热门评论</TableHead>
+                <TableHead className="max-w-[320px] text-center">
+                  热门评论
+                </TableHead>
               ) : null}
             </TableRow>
           </TableHeader>
@@ -707,11 +849,17 @@ function VideoList({
                             <p>{commentTitle}</p>
                             <p className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                               <span className="flex items-center gap-1">
-                                <ThumbsUp className="h-3 w-3" aria-hidden="true" />
+                                <ThumbsUp
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
                                 {formatCompactCount(video.topCommentLikeCount)}
                               </span>
                               <span className="flex items-center gap-1">
-                                <MessageCircle className="h-3 w-3" aria-hidden="true" />
+                                <MessageCircle
+                                  className="h-3 w-3"
+                                  aria-hidden="true"
+                                />
                                 {formatCompactCount(video.topCommentReplyCount)}
                               </span>
                             </p>
@@ -779,7 +927,11 @@ function VideoList({
                               />
                             </a>
                           </TooltipTrigger>
-                          <TooltipContent side="top" align="end" className="p-0">
+                          <TooltipContent
+                            side="top"
+                            align="end"
+                            className="p-0"
+                          >
                             <img
                               src={video.thumbnailUrl}
                               alt={`${video.title} 预览图`}
@@ -927,11 +1079,17 @@ function VideoList({
                           <p>{commentTitle}</p>
                           <p className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1">
-                              <ThumbsUp className="h-3 w-3" aria-hidden="true" />
+                              <ThumbsUp
+                                className="h-3 w-3"
+                                aria-hidden="true"
+                              />
                               {formatCompactCount(video.topCommentLikeCount)}
                             </span>
                             <span className="flex items-center gap-1">
-                              <MessageCircle className="h-3 w-3" aria-hidden="true" />
+                              <MessageCircle
+                                className="h-3 w-3"
+                                aria-hidden="true"
+                              />
                               {formatCompactCount(video.topCommentReplyCount)}
                             </span>
                           </p>
@@ -959,9 +1117,13 @@ function VideoList({
     bodyContent = (
       <Empty className="border border-dashed border-muted-foreground/40 bg-muted/10">
         <EmptyHeader>
-          <EmptyTitle>No videos found</EmptyTitle>
+          <EmptyTitle>
+            {isFiltered ? "未找到匹配的视频" : "No videos found"}
+          </EmptyTitle>
           <EmptyDescription>
-            Try searching for a different channel or keyword.
+            {isFiltered
+              ? "请尝试调整筛选条件或输入其他关键字。"
+              : "Try searching for a different channel or keyword."}
           </EmptyDescription>
         </EmptyHeader>
       </Empty>
