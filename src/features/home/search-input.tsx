@@ -72,6 +72,10 @@ type VideosListItem = {
   snippet?: {
     title?: string;
     publishedAt?: string;
+    description?: string;
+    channelId?: string;
+    channelTitle?: string;
+    tags?: string[];
     thumbnails?: Thumbnails;
   };
   statistics?: {
@@ -116,6 +120,15 @@ export type VideoTableRow = {
   topComment: string;
   topCommentLikeCount: number;
   topCommentReplyCount: number;
+  channelId?: string;
+  channelTitle?: string;
+  channelHandle?: string;
+  description?: string;
+  duration?: string;
+  tags?: string[];
+  topCommentAuthor?: string;
+  topCommentPublishedAt?: string;
+  source?: "local" | "youtube";
 };
 
 export type ChannelMetadata = {
@@ -161,6 +174,105 @@ interface SearchInputProps {
   loadHotComments?: boolean;
 }
 
+type LocalChannelStatistics = {
+  subscriberCount?: string | number | null;
+  videoCount?: string | number | null;
+  viewCount?: string | number | null;
+};
+
+type LocalChannelRecord = {
+  id?: string | null;
+  channelId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  handle?: string | null;
+  customUrl?: string | null;
+  thumbnailUrl?: string | null;
+  statistics?: LocalChannelStatistics | null;
+  subscriberCount?: string | number | null;
+  videoCount?: string | number | null;
+  viewCount?: string | number | null;
+};
+
+type LocalChannelResponse = {
+  data?: LocalChannelRecord | null;
+};
+
+type LocalTopComment = {
+  videoId?: string | null;
+  channelId?: string | null;
+  commentContent?: string | null;
+  comment_content?: string | null;
+  canReply?: boolean | null;
+  can_reply?: boolean | null;
+  isPublic?: boolean | null;
+  is_public?: boolean | null;
+  likeCount?: number | string | null;
+  like_count?: number | string | null;
+  totalReplyCount?: number | string | null;
+  total_reply_count?: number | string | null;
+  authorDisplayName?: string | null;
+  author_display_name?: string | null;
+  authorProfileImageUrl?: string | null;
+  author_profile_image_url?: string | null;
+  authorChannelUrl?: string | null;
+  author_channel_url?: string | null;
+  authorChannelId?: string | null;
+  author_channel_id?: string | null;
+  publishedAt?: string | null;
+  published_at?: string | null;
+  updatedAt?: string | null;
+  updated_at?: string | null;
+  lastUpdate?: string | null;
+  last_update?: string | null;
+};
+
+type LocalVideoStatistics = {
+  viewCount?: string | number | null;
+  likeCount?: string | number | null;
+  favoriteCount?: string | number | null;
+  commentCount?: string | number | null;
+} | null;
+
+type LocalVideoRecord = {
+  id?: string | null;
+  videoId?: string | null;
+  title?: string | null;
+  description?: string | null;
+  publishedAt?: string | null;
+  contentDetails?: {
+    videoPublishedAt?: string | null;
+    duration?: string | null;
+  } | null;
+  duration?: string | null;
+  thumbnailUrl?: string | null;
+  thumbnails?: Thumbnails | null;
+  statistics?: LocalVideoStatistics;
+  viewCount?: string | number | null;
+  likeCount?: string | number | null;
+  favoriteCount?: string | number | null;
+  commentCount?: string | number | null;
+  channelId?: string | null;
+  channelTitle?: string | null;
+  channelHandle?: string | null;
+  tags?: string[] | null;
+  topComment?: LocalTopComment | null;
+  top_comment?: LocalTopComment | null;
+};
+
+type LocalVideosResponse = {
+  data?: LocalVideoRecord[] | null;
+  meta?: {
+    limit?: number;
+    offset?: number;
+    total?: number;
+    includeTopComment?: boolean;
+  } | null;
+};
+
+const CHANNEL_ID_PATTERN = /^UC[a-zA-Z0-9_-]{22}$/;
+const LOCAL_VIDEO_PAGE_SIZE = 200;
+
 const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
   function SearchInput(
     {
@@ -194,7 +306,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         // http://www.youtube.com/embed/VIDEO_ID
         // https://youtu.be/VIDEO_ID
         // http://youtube.com/watch?v=VIDEO_ID&other=params
-        
+
         // 如果包含 youtu.be
         const youtuBeMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
         if (youtuBeMatch) {
@@ -202,13 +314,17 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
         }
 
         // 如果包含 youtube.com/watch?v=
-        const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+        const watchMatch = trimmed.match(
+          /youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/,
+        );
         if (watchMatch) {
           return watchMatch[1];
         }
 
         // 如果包含 youtube.com/embed/
-        const embedMatch = trimmed.match(/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/);
+        const embedMatch = trimmed.match(
+          /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+        );
         if (embedMatch) {
           return embedMatch[1];
         }
@@ -225,6 +341,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       }
     }, []);
 
+    // 清空频道列表并重置 loading/subscription 状态
     const resetChannelVideos = useCallback(() => {
       videosAbortControllerRef.current?.abort();
       videosAbortControllerRef.current = null;
@@ -241,6 +358,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
       });
     }, [onChannelVideosUpdate]);
 
+    // 核心：尝试根据查询词加载频道视频，优先命中本地缓存，失败再回退到 YouTube
     const loadChannelVideos = useCallback(
       async (rawQuery: string, options?: { channelId?: string }) => {
         const trimmed = rawQuery.trim();
@@ -275,15 +393,78 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
 
         pushState();
 
-        const parseCount = (count?: string) => {
-          if (!count) return 0;
-          const parsed = Number(count);
-          return Number.isFinite(parsed) ? parsed : 0;
+        const parseCount = (count?: string | number | null) => {
+          if (typeof count === "number") {
+            return Number.isFinite(count) ? count : 0;
+          }
+          if (typeof count === "string") {
+            const parsed = Number(count);
+            return Number.isFinite(parsed) ? parsed : 0;
+          }
+          return 0;
+        };
+
+        const pickFirstString = (
+          ...values: Array<string | null | undefined>
+        ): string => {
+          for (const value of values) {
+            if (typeof value !== "string") continue;
+            const trimmed = value.trim();
+            if (trimmed) return trimmed;
+          }
+          return "";
+        };
+
+        const resolveLocalCommentText = (
+          comment: LocalTopComment | null,
+        ): string => {
+          if (!comment) return "";
+          return pickFirstString(
+            comment.commentContent,
+            comment.comment_content,
+          );
+        };
+
+        const resolveLocalCommentLikeCount = (
+          comment: LocalTopComment | null,
+        ): number => parseCount(comment?.likeCount ?? comment?.like_count ?? 0);
+
+        const resolveLocalCommentReplyCount = (
+          comment: LocalTopComment | null,
+        ): number =>
+          parseCount(
+            comment?.totalReplyCount ?? comment?.total_reply_count ?? 0,
+          );
+
+        const resolveLocalCommentAuthor = (
+          comment: LocalTopComment | null,
+        ): string =>
+          pickFirstString(
+            comment?.authorDisplayName,
+            comment?.author_display_name,
+          );
+
+        const resolveLocalCommentPublishedAt = (
+          comment: LocalTopComment | null,
+        ): string =>
+          pickFirstString(comment?.publishedAt, comment?.published_at);
+
+        const ensureHandleFormat = (value: string) => {
+          const trimmedHandle = value.trim().replace(/^@+/, "");
+          if (!trimmedHandle) return "";
+          return `@${trimmedHandle}`;
+        };
+
+        const normalizeCustomUrlPath = (value: string) => {
+          const withoutHandlePrefix = value.trim().replace(/^@+/, "");
+          return withoutHandlePrefix;
         };
 
         const fetchSubscriptionStatus = async (channelId: string) => {
           try {
-            const response = await apiFetch<{ data?: { subscribed?: boolean } }>(
+            const response = await apiFetch<{
+              data?: { subscribed?: boolean };
+            }>(
               `/api/youtube/subscription-status?channel_id=${encodeURIComponent(channelId)}`,
               { signal: controller.signal },
             );
@@ -298,12 +479,288 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             ) {
               return null;
             }
-            console.error("Failed to fetch subscription status", subscriptionError);
+            console.error(
+              "Failed to fetch subscription status",
+              subscriptionError,
+            );
             return null;
           }
         };
 
+        type LocalLoadResult = {
+          channelId: string;
+          channelMetadata: ChannelMetadata;
+          videos: VideoTableRow[];
+        };
+
+        const fetchLocalChannel = async (
+          path: string,
+        ): Promise<LocalChannelRecord | null> => {
+          try {
+            const response = await apiFetch<LocalChannelResponse>(path, {
+              signal: controller.signal,
+            });
+            return response?.data ?? null;
+          } catch (error) {
+            if (controller.signal.aborted) return null;
+            if (
+              error instanceof ApiError &&
+              [400, 401, 403, 404].includes(error.status)
+            ) {
+              return null;
+            }
+            console.error("Failed to fetch local channel data", error);
+            return null;
+          }
+        };
+
+        const fetchLocalVideos = async (
+          channelIdValue: string,
+        ): Promise<LocalVideoRecord[] | null> => {
+          const collected: LocalVideoRecord[] = [];
+          let offset = 0;
+          let hasMore = true;
+          while (hasMore) {
+            if (controller.signal.aborted) return null;
+            const params = new URLSearchParams({
+              limit: LOCAL_VIDEO_PAGE_SIZE.toString(),
+              offset: offset.toString(),
+            });
+            if (loadHotComments) {
+              params.set("includeTopComment", "true");
+            }
+            try {
+              const response = await apiFetch<LocalVideosResponse>(
+                `/api/youtube/channels/${encodeURIComponent(channelIdValue)}/videos?${params.toString()}`,
+                { signal: controller.signal },
+              );
+              const batch = Array.isArray(response?.data)
+                ? (response.data.filter((record): record is LocalVideoRecord =>
+                    Boolean(record),
+                  ) as LocalVideoRecord[])
+                : [];
+              collected.push(...batch);
+              const total = response?.meta?.total;
+              offset += batch.length;
+              const reachedEnd =
+                batch.length < LOCAL_VIDEO_PAGE_SIZE ||
+                (typeof total === "number" && offset >= total);
+              hasMore = !reachedEnd;
+            } catch (error) {
+              if (controller.signal.aborted) return null;
+              if (
+                error instanceof ApiError &&
+                [401, 403, 404].includes(error.status)
+              ) {
+                return null;
+              }
+              console.error("Failed to fetch local channel videos", error);
+              return null;
+            }
+          }
+          return collected;
+        };
+
+        const toChannelMetadata = (
+          record: LocalChannelRecord,
+        ): ChannelMetadata => {
+          const stats = record.statistics ?? {};
+          const title = record.title?.trim() ?? trimmed;
+          const rawHandle =
+            record.handle?.trim() ?? record.customUrl?.trim() ?? "";
+          const fallbackHandle = ensureHandleFormat(
+            trimmed.startsWith("@") ? trimmed : `@${trimmed}`,
+          );
+          return {
+            handle: rawHandle ? ensureHandleFormat(rawHandle) : fallbackHandle,
+            title,
+            description: record.description?.trim() ?? "",
+            subscriberCount: parseCount(
+              stats.subscriberCount ?? record.subscriberCount,
+            ),
+            videoCount: parseCount(stats.videoCount ?? record.videoCount),
+            viewCount: parseCount(stats.viewCount ?? record.viewCount),
+          };
+        };
+
+        const toVideoRows = (
+          records: LocalVideoRecord[],
+          channelIdHint: string,
+          channelMetadataHint: ChannelMetadata | null,
+        ): VideoTableRow[] => {
+          return records
+            .map<VideoTableRow | null>((record) => {
+              const id = record.videoId?.trim() ?? record.id?.trim();
+              if (!id) return null;
+              const stats = record.statistics ?? null;
+              const thumbnails = record.thumbnails ?? null;
+              const topComment =
+                record.topComment ?? record.top_comment ?? null;
+              const description = record.description?.trim() ?? "";
+              const tags =
+                Array.isArray(record.tags) && record.tags.length > 0
+                  ? record.tags
+                      .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
+                      .filter((tag): tag is string => Boolean(tag))
+                  : [];
+              const thumbnailUrl =
+                record.thumbnailUrl?.trim() ??
+                thumbnails?.high?.url?.trim() ??
+                thumbnails?.medium?.url?.trim() ??
+                thumbnails?.default?.url?.trim() ??
+                "";
+              const publishedAt =
+                record.publishedAt ??
+                record.contentDetails?.videoPublishedAt ??
+                "";
+              const duration =
+                record.contentDetails?.duration ?? record.duration ?? "";
+              return {
+                id,
+                title: record.title?.trim() ?? "Untitled",
+                publishedAt,
+                thumbnailUrl,
+                viewCount: parseCount(
+                  stats?.viewCount ?? record.viewCount ?? 0,
+                ),
+                likeCount: parseCount(
+                  stats?.likeCount ?? record.likeCount ?? 0,
+                ),
+                favoriteCount: parseCount(
+                  stats?.favoriteCount ?? record.favoriteCount ?? 0,
+                ),
+                commentCount: parseCount(
+                  stats?.commentCount ?? record.commentCount ?? 0,
+                ),
+                topComment: resolveLocalCommentText(topComment),
+                topCommentLikeCount: resolveLocalCommentLikeCount(topComment),
+                topCommentReplyCount: resolveLocalCommentReplyCount(topComment),
+                channelId: record.channelId?.trim() ?? channelIdHint,
+                channelTitle:
+                  record.channelTitle?.trim() ??
+                  channelMetadataHint?.title ??
+                  "",
+                channelHandle:
+                  record.channelHandle?.trim() ??
+                  channelMetadataHint?.handle ??
+                  "",
+                description,
+                duration,
+                tags,
+                topCommentAuthor: resolveLocalCommentAuthor(topComment),
+                topCommentPublishedAt:
+                  resolveLocalCommentPublishedAt(topComment),
+                source: "local",
+              };
+            })
+            .filter((record): record is VideoTableRow => record !== null)
+            .sort((a, b) => {
+              const viewDiff = b.viewCount - a.viewCount;
+              if (viewDiff !== 0) return viewDiff;
+              const likeDiff = b.likeCount - a.likeCount;
+              if (likeDiff !== 0) return likeDiff;
+              const timeA = new Date(a.publishedAt).getTime();
+              const timeB = new Date(b.publishedAt).getTime();
+              const normalizedA = Number.isFinite(timeA) ? timeA : 0;
+              const normalizedB = Number.isFinite(timeB) ? timeB : 0;
+              return normalizedB - normalizedA;
+            });
+        };
+
+        // 命中本地缓存：按 channelId 或 customUrl 查询，命中后立即返回
+        const tryLoadFromLocal = async (): Promise<LocalLoadResult | null> => {
+          const attemptChannelById = async (channelIdValue: string) => {
+            if (!channelIdValue) return null;
+            return fetchLocalChannel(
+              `/api/youtube/channels/${encodeURIComponent(channelIdValue)}`,
+            );
+          };
+
+          const attemptChannelByCustomUrl = async (
+            customUrl: string,
+          ): Promise<LocalChannelRecord | null> => {
+            const normalizedCustomUrl = normalizeCustomUrlPath(customUrl);
+            if (!normalizedCustomUrl) return null;
+            return fetchLocalChannel(
+              `/api/youtube/channels/custom/${encodeURIComponent(normalizedCustomUrl)}`,
+            );
+          };
+
+          let channelRecord: LocalChannelRecord | null = null;
+
+          if (resolvedChannelId) {
+            channelRecord = await attemptChannelById(resolvedChannelId);
+          }
+
+          if (!channelRecord && CHANNEL_ID_PATTERN.test(trimmed)) {
+            channelRecord = await attemptChannelById(trimmed);
+          }
+
+          if (!channelRecord) {
+            const candidates = Array.from(
+              new Set(
+                [
+                  trimmed,
+                  trimmed.startsWith("@") ? trimmed.slice(1) : `@${trimmed}`,
+                ]
+                  .map((candidate) => candidate.trim())
+                  .filter(Boolean),
+              ),
+            );
+            for (const candidate of candidates) {
+              channelRecord = await attemptChannelByCustomUrl(candidate);
+              if (channelRecord) break;
+            }
+          }
+
+          if (!channelRecord) return null;
+
+          const channelIdValue =
+            channelRecord.channelId?.trim() ?? channelRecord.id?.trim();
+          if (!channelIdValue) return null;
+
+          const channelMetadata = toChannelMetadata(channelRecord);
+          const videoRecords = await fetchLocalVideos(channelIdValue);
+          if (!videoRecords) return null;
+
+          const videos = toVideoRows(
+            videoRecords,
+            channelIdValue,
+            channelMetadata,
+          );
+          return { channelId: channelIdValue, channelMetadata, videos };
+        };
+
+        const localResult = await tryLoadFromLocal();
+        if (controller.signal.aborted) return;
+        if (localResult) {
+          if (videosAbortControllerRef.current !== controller) return;
+          lastRequestRef.current = {
+            query: localResult.channelMetadata.title,
+            channelId: localResult.channelId,
+          };
+          pushState({
+            channelId: localResult.channelId,
+            channelMetadata: localResult.channelMetadata,
+            videos: localResult.videos,
+            error: null,
+            isLoading: false,
+            isSubscriptionLoading: true,
+            isSubscribed: null,
+          });
+          const subscriptionStatus = await fetchSubscriptionStatus(
+            localResult.channelId,
+          );
+          if (controller.signal.aborted) return;
+          pushState({
+            isSubscribed: subscriptionStatus,
+            isSubscriptionLoading: false,
+          });
+          return;
+        }
+
         try {
+          // 本地未命中：退回到 YouTube，按 channelId/handle 获取频道与上传列表
           const apiKey = await getYoutubeApiKey();
           if (controller.signal.aborted) return;
 
@@ -614,6 +1071,17 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
                 topComment: topCommentsMap.get(id)?.text ?? "",
                 topCommentLikeCount: topCommentsMap.get(id)?.likeCount ?? 0,
                 topCommentReplyCount: topCommentsMap.get(id)?.replyCount ?? 0,
+                channelId,
+                channelTitle: normalizedChannelName,
+                channelHandle,
+                description: snippet.description?.trim() ?? "",
+                duration: "",
+                tags: Array.isArray(snippet.tags)
+                  ? snippet.tags
+                      .map((tag) => (typeof tag === "string" ? tag.trim() : ""))
+                      .filter((tag): tag is string => Boolean(tag))
+                  : [],
+                source: "youtube",
               };
             })
             .filter((item): item is VideoTableRow => item !== null)
