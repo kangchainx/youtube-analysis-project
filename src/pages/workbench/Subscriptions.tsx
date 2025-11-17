@@ -46,6 +46,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { toast } from "sonner";
 
 type SubscriptionRecord = {
   id: string;
@@ -59,6 +60,7 @@ type SubscriptionRecord = {
 };
 
 const PAGE_SIZE = 8;
+const TABLE_ROW_CLASS = "h-12";
 
 const COUNTRY_OPTIONS = [
   { value: "", label: "全部国家" },
@@ -90,6 +92,7 @@ function SubscriptionsPage() {
   const [filterForm, setFilterForm] = useState(FILTER_DEFAULTS);
   const [activeFilters, setActiveFilters] = useState(FILTER_DEFAULTS);
   const [isCountryPickerOpen, setIsCountryPickerOpen] = useState(false);
+  const [unsubscribingId, setUnsubscribingId] = useState<string | null>(null);
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const startIndex = offset;
   const selectedCountryOption =
@@ -157,7 +160,7 @@ function SubscriptionsPage() {
           ? `@${channel.customUrl.replace(/^@/, "")}`
           : record.customUrl?.trim()
             ? `@${record.customUrl.replace(/^@/, "")}`
-            : record.channelId ?? "-";
+            : (record.channelId ?? "-");
         const lastActive =
           channel?.lastSync ?? channel?.publishedAt ?? new Date().toISOString();
 
@@ -232,9 +235,49 @@ function SubscriptionsPage() {
     setOffset(0);
   };
 
-  const handleUnsubscribe = (record: SubscriptionRecord) => {
-    console.info("Unsubscribe placeholder", record.channelId);
-  };
+  const handleUnsubscribe = useCallback(
+    async (record: SubscriptionRecord) => {
+      const channelId = record.channelId?.trim();
+      if (!channelId || channelId === "-") {
+        toast.error("无法获取频道 ID，退订失败。");
+        return;
+      }
+
+      setUnsubscribingId(record.id);
+      try {
+        const response = await apiFetch<{
+          data?: { channelId?: string; unsubscribed?: boolean };
+        }>("/api/youtube/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ channel_id: channelId }),
+        });
+
+        const unsubscribed =
+          typeof response?.data?.unsubscribed === "boolean"
+            ? response.data.unsubscribed
+            : false;
+        toast.success(unsubscribed ? "退订成功" : "尚未订阅该频道");
+        await fetchSubscriptions();
+      } catch (caught) {
+        console.error("Failed to unsubscribe channel", caught);
+        const message =
+          caught instanceof ApiError
+            ? caught.status === 401
+              ? "登录已过期，请重新登录。"
+              : caught.message || "退订失败，请稍后重试。"
+            : caught instanceof Error
+              ? caught.message
+              : "退订失败，请稍后重试。";
+        toast.error(message);
+      } finally {
+        setUnsubscribingId((current) =>
+          current === record.id ? null : current,
+        );
+      }
+    },
+    [fetchSubscriptions],
+  );
 
   const handlePreviousPage = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -378,97 +421,112 @@ function SubscriptionsPage() {
 
         <div className="overflow-x-auto">
           <TooltipProvider>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40">
-                <TableHead className="w-[70px] text-center">序号</TableHead>
-                <TableHead className="w-[240px] text-center">频道名称</TableHead>
-                <TableHead className="min-w-[240px]">描述</TableHead>
-                <TableHead className="w-[120px] text-center">国家</TableHead>
-                <TableHead className="w-[120px] text-center">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`} className="h-16">
-                    <TableCell>
-                      <Skeleton className="h-4 w-8" />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="mt-2 h-3 w-24" />
-                    </TableCell>
-                    <TableCell>
-                      <Skeleton className="h-4 w-48" />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Skeleton className="h-4 w-16" />
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Skeleton className="h-8 w-24" />
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : subscriptions.length > 0 ? (
-                subscriptions.map((subscription, index) => (
-                  <TableRow key={subscription.id} className="h-16">
-                    <TableCell className="text-center text-sm font-medium text-muted-foreground">
-                      {startIndex + index + 1}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex flex-col gap-1">
-                        <span className="font-medium text-foreground">
-                          {subscription.channelName}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {subscription.handle}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="block max-w-[420px] line-clamp-2">
-                            {subscription.description}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent
-                          side="top"
-                          align="start"
-                          className="max-w-md break-words"
-                        >
-                          {subscription.description}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell className="text-sm text-center">
-                      {subscription.country}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleUnsubscribe(subscription)}
-                      >
-                        退订
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    className="py-12 text-center text-sm text-muted-foreground"
-                  >
-                    {error ?? "暂未订阅任何频道。"}
-                  </TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/40">
+                  <TableHead className="w-[70px] text-center">序号</TableHead>
+                  <TableHead className="w-[220px] text-center">
+                    频道名称
+                  </TableHead>
+                  <TableHead className="w-[180px] text-center">
+                    频道ID
+                  </TableHead>
+                  <TableHead className="min-w-[260px]">描述</TableHead>
+                  <TableHead className="w-[120px] text-center">国家</TableHead>
+                  <TableHead className="w-[120px] text-center">操作</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  Array.from({ length: PAGE_SIZE }).map((_, index) => (
+                    <TableRow
+                      key={`skeleton-${index}`}
+                      className={TABLE_ROW_CLASS}
+                    >
+                      <TableCell>
+                        <Skeleton className="h-4 w-8" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="mt-2 h-3 w-24" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-4 w-36" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-48" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Skeleton className="h-8 w-24" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : subscriptions.length > 0 ? (
+                  subscriptions.map((subscription, index) => (
+                    <TableRow key={subscription.id} className={TABLE_ROW_CLASS}>
+                      <TableCell className="text-center text-sm font-medium text-muted-foreground">
+                        {startIndex + index + 1}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-medium text-foreground">
+                            {subscription.channelName}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-sm font-mono text-muted-foreground">
+                        {subscription.customUrl ?? "-"}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="block max-w-[420px] line-clamp-2">
+                              {subscription.description}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent
+                            side="top"
+                            align="start"
+                            className="max-w-md break-words"
+                          >
+                            {subscription.description}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell className="text-sm text-center">
+                        {subscription.country}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleUnsubscribe(subscription)}
+                          disabled={unsubscribingId === subscription.id}
+                          aria-busy={unsubscribingId === subscription.id}
+                        >
+                          {unsubscribingId === subscription.id
+                            ? "处理中..."
+                            : "退订"}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="py-12 text-center text-sm text-muted-foreground"
+                    >
+                      {error ?? "暂未订阅任何频道。"}
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
           </TooltipProvider>
         </div>
 
