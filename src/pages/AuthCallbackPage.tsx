@@ -147,8 +147,8 @@ function AuthCallbackPage() {
           caughtError instanceof ApiError
             ? caughtError.message
             : caughtError instanceof Error
-                ? caughtError.message
-                : "登录验证失败，请重试。";
+              ? caughtError.message
+              : "登录验证失败，请重试。";
 
         setError(message);
         notifyOpener("google-auth-error", { message });
