@@ -301,7 +301,10 @@ function SubscriptionsPage() {
   const totalLabel = typeof totalCount === "number" ? totalCount : "未知";
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-foreground">我的订阅</h1>
+      </div>
       <div className="rounded-lg border border-border/60 bg-card/70 p-4">
         <form
           className="flex flex-wrap items-end gap-3"
