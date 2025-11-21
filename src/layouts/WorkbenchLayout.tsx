@@ -88,9 +88,65 @@ function SidebarCollapseButton() {
   );
 }
 
-function WorkbenchLayout() {
-  const location = useLocation();
+function WorkbenchSidebarHeader() {
+  const { open } = useSidebar();
 
+  return (
+    <SidebarHeader className="flex items-center justify-between border-b border-border/60">
+      {open && (
+        <div className="min-w-0">
+          <p className="truncate text-sm font-semibold text-foreground">
+            工作台
+          </p>
+          <p className="truncate text-xs text-muted-foreground">
+            管理你的工作台
+          </p>
+        </div>
+      )}
+      <SidebarCollapseButton />
+    </SidebarHeader>
+  );
+}
+
+function WorkbenchNavMenu() {
+  const location = useLocation();
+  const { open } = useSidebar();
+
+  return (
+    <SidebarMenu>
+      {navItems.map((item) => {
+        const Icon = item.icon;
+        const isActive = isActivePath(location.pathname, item.href);
+        return (
+          <SidebarMenuItem key={item.href}>
+            <SidebarMenuButton asChild isActive={isActive}>
+              <Link
+                to={item.href}
+                aria-current={isActive ? "page" : undefined}
+                aria-label={item.title}
+                className="flex w-full min-w-0 items-center gap-3"
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {open && (
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate whitespace-nowrap text-sm font-semibold leading-tight text-foreground">
+                      {item.title}
+                    </span>
+                    <span className="truncate whitespace-nowrap text-xs leading-tight text-muted-foreground">
+                      {item.subtitle}
+                    </span>
+                  </div>
+                )}
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        );
+      })}
+    </SidebarMenu>
+  );
+}
+
+function WorkbenchLayout() {
   return (
     <SidebarProvider>
       <div className="flex min-h-[calc(100vh-3.5rem)] bg-background">
@@ -99,43 +155,11 @@ function WorkbenchLayout() {
           aria-label="工作台导航"
           className="sticky top-14 h-[calc(100vh-3.5rem)]"
         >
-          <SidebarHeader className="flex items-center justify-between border-b border-border/60">
-            <div className="group-data-[state=collapsed]/sidebar:hidden">
-              <p className="text-sm font-semibold text-foreground">工作台</p>
-              <p className="text-xs text-muted-foreground">管理你的工作台</p>
-            </div>
-            <SidebarCollapseButton />
-          </SidebarHeader>
+          <WorkbenchSidebarHeader />
           <SidebarContent>
             <SidebarGroup>
               <SidebarGroupContent>
-                <SidebarMenu>
-                  {navItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = isActivePath(location.pathname, item.href);
-                    return (
-                      <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton asChild isActive={isActive}>
-                          <Link
-                            to={item.href}
-                            aria-current={isActive ? "page" : undefined}
-                            className="flex w-full items-center gap-3"
-                          >
-                            <Icon className="h-4 w-4 shrink-0" />
-                            <div className="flex flex-1 flex-col truncate group-data-[state=collapsed]/sidebar:hidden">
-                              <span className="text-sm font-semibold text-foreground">
-                                {item.title}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {item.subtitle}
-                              </span>
-                            </div>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                </SidebarMenu>
+                <WorkbenchNavMenu />
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>

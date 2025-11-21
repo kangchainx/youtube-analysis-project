@@ -53,7 +53,13 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
   ({ className, collapsible = "none", ...props }, ref) => {
     const { open } = useSidebar();
     const isIconCollapsible = collapsible === "icon";
-    const widthClass = isIconCollapsible ? (open ? "w-64" : "w-16") : "w-64";
+    const expandedWidth = "w-72";
+    const collapsedWidth = "w-16";
+    const widthClass = isIconCollapsible
+      ? open
+        ? expandedWidth
+        : collapsedWidth
+      : expandedWidth;
 
     return (
       <aside
@@ -61,7 +67,7 @@ export const Sidebar = React.forwardRef<HTMLElement, SidebarProps>(
         data-state={open ? "open" : "collapsed"}
         data-collapsible={isIconCollapsible ? "icon" : undefined}
         className={cn(
-          "group/sidebar relative flex h-full shrink-0 flex-col border-r border-border/60 bg-card text-card-foreground transition-[width] duration-200 ease-linear",
+          "group/sidebar relative flex h-full shrink-0 flex-col overflow-hidden border-r border-border/60 bg-card text-card-foreground transition-[width] duration-200 ease-linear",
           widthClass,
           className,
         )}
@@ -178,7 +184,7 @@ export const SidebarMenuButton = React.forwardRef<
       type={asChild ? undefined : "button"}
       data-active={isActive ? "true" : "false"}
       className={cn(
-        "group/sidebar-button flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+        "group/sidebar-button flex w-full min-w-0 items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
         "group-data-[collapsible=icon]/sidebar:justify-center group-data-[state=collapsed]/sidebar:px-2",
         isActive && "bg-muted text-primary hover:text-primary",
         className,
