@@ -174,6 +174,7 @@ function buildDateRange(range: DateRangeKey, channelStartDate?: string | null) {
 
   let start = new Date(end);
   if (preset.days === null) {
+    // “all” 场景优先取频道创建时间，否则退回到今日
     start = startFromChannel ? new Date(startFromChannel) : new Date(end);
   } else {
     start.setDate(end.getDate() - (preset.days - 1));
@@ -207,6 +208,7 @@ function DashboardPage() {
       setIsChannelLoading(true);
       setChannelError(null);
       try {
+        // 频道可能有多个来源（mine/managed），这里择优选择主频道并回退到最早的发布时间
         const response = await apiFetch<{ data?: ChannelInfo[] }>(
           "/api/youtube/analytics/channels/mine",
         );
@@ -296,6 +298,7 @@ function DashboardPage() {
           | Array<Partial<AnalyticsPoint>>
         >(`/api/youtube/analytics/reports?${params.toString()}`);
 
+        // 后端返回格式不统一（数组/对象包裹/tables 形态），先尝试直接数组
         const rowsFromArray: Array<Partial<AnalyticsPoint>> = Array.isArray(
           response,
         )
@@ -326,7 +329,7 @@ function DashboardPage() {
           })
           .filter(Boolean) as AnalyticsPoint[];
 
-        // 处理表格形式的响应：columnHeaders + rows (数组)
+        // 再兜底处理 columnHeaders+rows 的表格响应
         if (!normalized.length && !Array.isArray(response)) {
           const tabularHeaders = response?.data?.columnHeaders;
           const tabularRows = response?.data?.rows;
@@ -340,11 +343,12 @@ function DashboardPage() {
                   const name = header?.name;
                   const value = row[index];
                   if (!name) return;
-                  if (name === "day" || name === "date" || name === "startDate") {
-                    metrics.date =
-                      typeof value === "string"
-                        ? value
-                        : endDate;
+                  if (
+                    name === "day" ||
+                    name === "date" ||
+                    name === "startDate"
+                  ) {
+                    metrics.date = typeof value === "string" ? value : endDate;
                     return;
                   }
                   if ((METRIC_KEYS as readonly string[]).includes(name)) {
@@ -395,6 +399,7 @@ function DashboardPage() {
     };
     let avgCount = 0;
 
+    // 累加求和，平均观看时长需单独按有效样本数量求平均
     analyticsData.forEach((row) => {
       METRIC_KEYS.forEach((key) => {
         const value = row[key];
@@ -454,11 +459,13 @@ function DashboardPage() {
     };
   }, [channelDetail, channelStartDate]);
 
-  const channelStatusText = isChannelLoading
-    ? "频道信息加载中..."
-    : channelDetail
-      ? "频道信息已同步"
-      : "暂无频道信息";
+  const channelStatusText = channelError
+    ? channelError
+    : isChannelLoading
+      ? "频道信息加载中..."
+      : channelDetail
+        ? "频道信息已同步"
+        : "暂无频道信息";
 
   return (
     <div className="space-y-5">
@@ -496,7 +503,12 @@ function DashboardPage() {
                   </span>
                 </div>
               ) : null}
-              <span className="ml-auto text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "ml-auto text-xs",
+                  channelError ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
                 {channelStatusText}
               </span>
             </div>

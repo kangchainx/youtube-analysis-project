@@ -96,6 +96,7 @@ export function ChartAreaInteractive({
   }, [metricConfig, selectedMetrics]);
 
   const sortedData = React.useMemo(() => {
+    // 确保按时间升序渲染，避免后端返回的列表顺序不一致导致折线跳动
     return [...data].sort((a, b) => {
       const aTime = new Date(a.date).getTime();
       const bTime = new Date(b.date).getTime();

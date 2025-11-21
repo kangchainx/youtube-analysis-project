@@ -50,6 +50,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       return;
     }
     try {
+      // 只取第一页，用 meta.total 返回未读总数，避免把大列表拉到前端
       const response = await fetchNotifications({
         page: 1,
         pageSize: 1,
@@ -67,6 +68,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         const deduped = current.filter((item) => item.id !== notification.id);
         return [notification, ...deduped].slice(0, RECENT_LIMIT);
       });
+      // 后端推送的是单条变更，前端在流内自增未读数，避免强依赖额外接口
       if (notification.msgStatus?.toLowerCase?.() === "unread") {
         setUnreadCount((current) => current + 1);
       }
@@ -77,6 +79,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) {
+      // 未登录时断开 SSE 并清空状态
       setLatestNotifications([]);
       setStreamStatus("idle");
       setLastReceivedAt(null);
@@ -98,6 +101,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         eventSourceRef.current = null;
       }
       setStreamStatus("connecting");
+      // 通过 EventSource 长连接收通知，后端需支持 withCredentials
       const source = new EventSource(
         `${API_BASE_URL}/api/notifications/stream`,
         { withCredentials: true },
@@ -115,6 +119,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
       source.addEventListener("message", (event) => {
         if (!event.data) return;
         try {
+          // SSE 携带的 payload 是单条通知，解析后放入列表并弹出提示
           const payload = JSON.parse(event.data) as NotificationRecord;
           addNotification(payload);
           const toastMessage = payload.msgTitle ?? "收到新的通知";
@@ -140,6 +145,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         if (reconnectTimerRef.current) {
           window.clearTimeout(reconnectTimerRef.current);
         }
+        // 断线后 5s 重连，避免频繁抖动
         reconnectTimerRef.current = window.setTimeout(() => {
           connect();
         }, 5000);

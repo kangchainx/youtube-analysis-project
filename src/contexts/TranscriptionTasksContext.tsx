@@ -54,6 +54,7 @@ const normalizeProgress = (value?: number | null) => {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return null;
   }
+  // 后端既可能返回 0-1 也可能返回 0-100，统一转成百分比并做边界保护
   const scaled = value <= 1 ? value * 100 : value;
   return Math.max(0, Math.min(100, Math.round(scaled)));
 };
@@ -79,6 +80,7 @@ export function TranscriptionTasksProvider({
       taskId: string,
       updater: (current: TranscriptionTaskItem | undefined) => TranscriptionTaskItem,
     ) => {
+      // 以 taskId 为键做幂等更新，确保并发状态更新时保持最新数据
       setTasksMap((previous) => {
         const current = previous[taskId];
         const nextTask = updater(current);
@@ -146,6 +148,7 @@ export function TranscriptionTasksProvider({
     async (taskId: string) => {
       if (!taskId) return;
       try {
+        // 定期从后端拉取任务状态，与 SSE 断线时的补偿
         const status = await getTaskStatus(taskId);
         applyStatusUpdate(taskId, status);
       } catch (error) {
@@ -191,7 +194,7 @@ export function TranscriptionTasksProvider({
           ...previous,
           [taskId]: newTask,
         }));
-        // Kick off an immediate status fetch so UI reflects backend state quickly.
+        // 创建成功后立刻触发一次状态查询，让 UI 快速与后端状态对齐
         void refreshTask(taskId);
         return newTask;
       } finally {

@@ -52,6 +52,7 @@ const createVideoRows = (
   videos: VideoTableRow[],
   includeHotComments: boolean,
 ) => {
+  // 根据是否需要热门评论动态扩展表头和数据列
   const headers = includeHotComments
     ? [...VIDEO_BASE_HEADERS, ...HOT_COMMENT_HEADERS]
     : VIDEO_BASE_HEADERS;
@@ -103,6 +104,7 @@ export const exportVideosToCsv = ({
     headers.map((cell) => escapeCsvCell(cell)).join(","),
     ...rows.map((row) => row.map((cell) => escapeCsvCell(cell)).join(",")),
   ];
+  // 写入 BOM 让 Excel 等默认用 UTF-8 正确解析中文
   const csvContent = "\uFEFF" + csvLines.join("\r\n");
 
   const blob = new Blob([csvContent], {

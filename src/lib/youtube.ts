@@ -53,6 +53,7 @@ function createQueryString(params: Record<string, QueryValue>) {
   for (const [key, rawValue] of Object.entries(params)) {
     if (rawValue === undefined || rawValue === null) continue;
 
+    // 官方 API 允许同一个字段多值，统一拆成数组逐个 append
     const values = Array.isArray(rawValue) ? rawValue : [rawValue];
 
     for (const value of values) {

@@ -44,6 +44,7 @@ const EMPTY_SESSION: AuthSession = {
 };
 
 function readStoredSession(): AuthSession {
+  // SSR 环境下没有 window，直接返回空会话
   if (typeof window === "undefined") return EMPTY_SESSION;
 
   try {
@@ -92,6 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
 
     try {
+      // 没有登录用户时清理存储，否则持久化核心字段（避免把不必要字段写入）
       if (!next.user) {
         window.localStorage.removeItem(STORAGE_KEY);
         return;
@@ -150,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    // 监听跨标签页的登录/退出变更，保持会话同步
     window.addEventListener("storage", handleStorage);
     return () => {
       window.removeEventListener("storage", handleStorage);
@@ -160,6 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (options?: { revoke?: boolean }) => {
       setIsLoggingOut(true);
       try {
+        // 调用后端注销接口（可选强制 revoke），即便失败也要清掉本地会话
         const hasOptions = Boolean(options?.revoke);
         await postJson(
           "/api/auth/logout",

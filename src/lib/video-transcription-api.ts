@@ -123,6 +123,7 @@ const DEFAULT_SUMMARY_LANGUAGE = "zh";
 const DEFAULT_EXPORT_FORMAT: ExportFormat = "markdown";
 
 const normalizeBoolean = (value: boolean | string | undefined, fallback: boolean) => {
+  // 后端布尔字段既支持布尔也支持 "true"/"false"，这里做统一归一化
   if (value === undefined) return fallback;
   if (typeof value === "string") {
     return value.toLowerCase() === "true";
@@ -131,6 +132,7 @@ const normalizeBoolean = (value: boolean | string | undefined, fallback: boolean
 };
 
 const ensureData = <T>(envelope: { data?: T } | T | null | undefined, errorMessage: string): T => {
+  // 后端有时直接返回数据，有时包一层 data，这里统一抽取并在缺失时抛出语义化错误
   if (envelope && typeof envelope === "object" && "data" in envelope) {
     const data = (envelope as { data?: T }).data;
     if (data !== undefined) {
@@ -158,6 +160,7 @@ export async function createTranscriptionTask(
     export_include_header: normalizeBoolean(payload.includeHeader, false),
   };
 
+  // 创建任务时参数需要符合后端的 snake_case 字段命名，这里一次性转换
   const response = await apiFetch<CreateTaskEnvelope>("/api/video-transcription", {
     method: "POST",
     headers: {
@@ -284,6 +287,7 @@ export function subscribeToTaskStream(
     return () => undefined;
   }
 
+  // 使用 SSE 持续监听指定任务的状态流，返回清理函数用于组件卸载
   const url = `${API_BASE_URL}/api/video-transcription/task/stream?task_id=${encodeURIComponent(taskId)}`;
   const eventSource = new EventSource(url, { withCredentials: true });
 

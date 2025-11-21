@@ -32,6 +32,7 @@ async function requestYoutubeKey(): Promise<string | null> {
 }
 
 export async function getYoutubeApiKey(): Promise<string> {
+  // 简单的内存缓存 + 复用进行中的请求，避免频繁打后端配置接口
   if (youtubeApiKey) return youtubeApiKey;
   if (inFlightRequest) return inFlightRequest;
 

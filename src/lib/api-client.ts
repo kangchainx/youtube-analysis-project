@@ -31,6 +31,7 @@ export async function apiFetch<TResponse = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<TResponse> {
+  // 允许传入相对路径统一走 API_BASE_URL，也允许直接传完整地址
   const url = path.startsWith("http")
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
@@ -50,6 +51,7 @@ export async function apiFetch<TResponse = unknown>(
   let payload: Json | string | null = null;
 
   try {
+    // 优先尝试解析 JSON，其次兜底解析文本，避免因为解析失败吞掉服务端返回的信息
     if (isJson) {
       payload = (await response.json()) as Json;
     } else if (
@@ -95,4 +97,3 @@ export async function postJson<TResponse = unknown, TBody = unknown>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
-
