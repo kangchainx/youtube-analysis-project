@@ -36,13 +36,13 @@ export async function apiFetch<TResponse = unknown>(
     ? path
     : `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+
   const mergedInit: RequestInit = {
     credentials: "include",
     ...init,
-    headers: {
-      Accept: "application/json",
-      ...(init.headers ?? {}),
-    },
+    headers,
   };
 
   const response = await fetch(url, mergedInit);
