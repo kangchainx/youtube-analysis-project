@@ -128,7 +128,7 @@ function Login() {
     try {
       const response = await postJson<{
         authorizationUrl?: string;
-      }>("/api/auth/google/init", {});
+      }>("/api/auth/google/init", { accessType: "offline" });
 
       const authorizationUrl = response?.authorizationUrl;
       if (!authorizationUrl) {
