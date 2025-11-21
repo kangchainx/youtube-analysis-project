@@ -9,6 +9,8 @@ import {
   Tooltip as RechartsTooltip,
   type TooltipProps,
 } from "recharts";
+import type { Payload as TooltipEntry } from "recharts/types/component/DefaultTooltipContent";
+import type { LegendPayload } from "recharts/types/component/DefaultLegendContent";
 
 export type ChartConfig = Record<
   string,
@@ -35,12 +37,24 @@ export function useChart() {
 type ChartContainerProps = {
   config: ChartConfig;
   className?: string;
+  /** Extra inline styles for the wrapper. */
+  style?: React.CSSProperties;
+  /** Fixed height for the chart container (defaults to 300). */
+  height?: number;
+  /** Minimum height to avoid zero-size warnings (defaults to 240). */
+  minHeight?: number;
+  /** Minimum width to avoid zero-size warnings (defaults to 0 so flex layouts can shrink). */
+  minWidth?: number;
   children: React.ReactNode;
 };
 
 export function ChartContainer({
   config,
   className,
+  style,
+  height = 300,
+  minHeight = 240,
+  minWidth = 0,
   children,
 }: ChartContainerProps) {
   const colorVars = React.useMemo(() => {
@@ -56,12 +70,17 @@ export function ChartContainer({
     return styles;
   }, [config]);
 
+  const containerStyle: React.CSSProperties = {
+    minWidth,
+    minHeight,
+    height,
+    ...colorVars,
+    ...style,
+  };
+
   return (
     <ChartContext.Provider value={{ config }}>
-      <div
-        className={cn("h-[300px] w-full", className)}
-        style={colorVars as React.CSSProperties}
-      >
+      <div className={cn("w-full min-w-0", className)} style={containerStyle}>
         <ResponsiveContainer width="100%" height="100%">
           {children}
         </ResponsiveContainer>
@@ -74,10 +93,18 @@ export function ChartTooltip(props: TooltipProps<number, string>) {
   return <RechartsTooltip {...props} />;
 }
 
-export type ChartTooltipContentProps = TooltipProps<number, string> & {
+export type ChartTooltipContentProps = {
+  active?: boolean;
+  payload?: ReadonlyArray<TooltipEntry<number, string>>;
+  label?: string | number;
   hideLabel?: boolean;
   indicator?: "dot" | "line";
   valueFormatter?: (value: number | string | null, name: string) => string;
+  labelFormatter?: (
+    label: string | number | undefined,
+    payload?: ReadonlyArray<TooltipEntry<number, string>>,
+  ) => React.ReactNode;
+  className?: string;
 };
 
 export function ChartTooltipContent({
@@ -98,7 +125,7 @@ export function ChartTooltipContent({
 
   const renderLabel =
     typeof labelFormatter === "function"
-      ? labelFormatter(label)
+      ? labelFormatter(label, payload)
       : label?.toString();
 
   return (
@@ -112,7 +139,7 @@ export function ChartTooltipContent({
         <div className="mb-1 text-xs text-muted-foreground">{renderLabel}</div>
       ) : null}
       <div className="grid gap-1">
-        {payload.map((entry) => {
+        {payload.map((entry: TooltipEntry<number, string>) => {
           const key = entry.dataKey?.toString() ?? entry.name?.toString() ?? "";
           const value =
             typeof valueFormatter === "function"
@@ -149,13 +176,15 @@ export function ChartLegend(props: LegendProps) {
   return <RechartsLegend {...props} />;
 }
 
-export function ChartLegendContent({ payload }: LegendProps) {
+export function ChartLegendContent(props: LegendProps) {
   const { config } = useChart();
-  if (!payload?.length) return null;
+  const typedPayload = (props as LegendProps & { payload?: LegendPayload[] })
+    .payload;
+  if (!typedPayload?.length) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      {payload.map((entry) => {
+    <div className="mt-8 flex flex-wrap items-center justify-center gap-4 text-sm">
+      {typedPayload.map((entry: LegendPayload) => {
         const key = entry.dataKey?.toString() ?? entry.value?.toString() ?? "";
         const color =
           entry.color || config[key]?.color || "var(--muted-foreground)";
@@ -164,7 +193,7 @@ export function ChartLegendContent({ payload }: LegendProps) {
         return (
           <div key={`${key}-${label}`} className="flex items-center gap-2">
             <span
-              className="h-2 w-2 rounded-full"
+              className="h-3 w-3 rounded-full"
               style={{ backgroundColor: color }}
             />
             <span className="text-xs text-muted-foreground">{label}</span>
@@ -174,4 +203,3 @@ export function ChartLegendContent({ payload }: LegendProps) {
     </div>
   );
 }
-

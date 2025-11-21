@@ -54,6 +54,7 @@ type ChartAreaInteractiveProps = {
   onDateRangeChange: (range: DateRangeKey) => void;
   rangeOptions?: typeof DATE_RANGE_OPTIONS;
   renderRangeSelector?: boolean;
+  headerActions?: React.ReactNode;
   isLoading?: boolean;
   error?: string | null;
   onRetry?: () => void;
@@ -79,6 +80,7 @@ export function ChartAreaInteractive({
   onDateRangeChange,
   rangeOptions = DATE_RANGE_OPTIONS,
   renderRangeSelector = true,
+  headerActions,
   isLoading = false,
   error = null,
   onRetry,
@@ -130,96 +132,102 @@ export function ChartAreaInteractive({
       );
     }
 
-    if (isLoading) {
-      return (
-        <div className="flex min-h-[240px] items-center justify-center gap-3 text-muted-foreground">
-          <Spinner className="h-5 w-5" />
-          <span className="text-sm">加载中...</span>
-        </div>
-      );
-    }
+    const hasData = sortedData.length > 0;
 
-    if (!sortedData.length) {
+    if (!hasData) {
       return (
-        <div className="flex min-h-[240px] items-center justify-center text-sm text-muted-foreground">
-          暂无数据，选择其他时间范围试试。
+        <div className="relative min-h-[240px]">
+          {isLoading ? (
+            <div className="absolute inset-0 flex items-center justify-center gap-3 text-muted-foreground">
+              <Spinner className="h-5 w-5" />
+              <span className="text-sm">加载中...</span>
+            </div>
+          ) : (
+            <div className="flex h-[240px] items-center justify-center text-sm text-muted-foreground">
+              暂无数据，选择其他时间范围试试。
+            </div>
+          )}
         </div>
       );
     }
 
     return (
-      <ChartContainer
-        config={chartConfig}
-        className="aspect-auto h-[320px] w-full"
-      >
-        <AreaChart data={sortedData} margin={{ left: 12, right: 12 }}>
-          <defs>
-            {selectedMetrics.map((metric) => (
-              <linearGradient
-                key={metric}
-                id={`fill-${metric}`}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop
-                  offset="5%"
-                  stopColor={`var(--color-${metric})`}
-                  stopOpacity={0.28}
-                />
-                <stop
-                  offset="95%"
-                  stopColor={`var(--color-${metric})`}
-                  stopOpacity={0.06}
-                />
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={10}
-            minTickGap={24}
-            tickFormatter={(value) => formatDateLabel(value)}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            width={70}
-            tickFormatter={(value) => value.toLocaleString()}
-          />
-          <ChartTooltip
-            cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
-            content={
-              <ChartTooltipContent
-                indicator="line"
-                valueFormatter={(value, name) =>
-                  formatTooltipValue(value as number, name)
-                }
-                labelFormatter={(value) => formatDateLabel(value)}
-              />
-            }
-          />
-          {selectedMetrics.map((metric) => (
-            <Area
-              key={metric}
-              dataKey={metric}
-              type="monotone"
-              stroke={`var(--color-${metric})`}
-              fill={`url(#fill-${metric})`}
-              strokeWidth={2}
-              connectNulls
-              dot={false}
-              isAnimationActive={false}
+      <div className="relative">
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-auto h-[320px] w-full"
+        >
+          <AreaChart data={sortedData} margin={{ left: 12, right: 12 }}>
+            <defs>
+              {selectedMetrics.map((metric) => (
+                <linearGradient
+                  key={metric}
+                  id={`fill-${metric}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="5%"
+                    stopColor={`var(--color-${metric})`}
+                    stopOpacity={0.28}
+                  />
+                  <stop
+                    offset="95%"
+                    stopColor={`var(--color-${metric})`}
+                    stopOpacity={0.06}
+                  />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid vertical={false} strokeDasharray="3 3" />
+            <XAxis
+              dataKey="date"
+              tickLine={false}
+              axisLine={false}
+              tickMargin={10}
+              minTickGap={24}
+              tickFormatter={(value) => formatDateLabel(value)}
             />
-          ))}
-          <ChartLegend content={<ChartLegendContent />} />
-        </AreaChart>
-      </ChartContainer>
+            <YAxis
+              tickLine={false}
+              axisLine={false}
+              tickMargin={8}
+              width={70}
+              tickFormatter={(value) => value.toLocaleString()}
+            />
+            <ChartTooltip
+              cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
+              content={
+                <ChartTooltipContent
+                  indicator="line"
+                  valueFormatter={(value, name) =>
+                    formatTooltipValue(value as number, name)
+                  }
+                  labelFormatter={(value) => formatDateLabel(value)}
+                />
+              }
+            />
+            {selectedMetrics.map((metric) => (
+              <Area
+                key={metric}
+                dataKey={metric}
+                type="monotone"
+                stroke={`var(--color-${metric})`}
+                fill={`url(#fill-${metric})`}
+                strokeWidth={2}
+                connectNulls
+                dot={false}
+                isAnimationActive
+                animationDuration={400}
+                animationEasing="ease-in-out"
+              />
+            ))}
+            <ChartLegend content={<ChartLegendContent />} />
+          </AreaChart>
+        </ChartContainer>
+      </div>
     );
   };
 
@@ -230,25 +238,28 @@ export function ChartAreaInteractive({
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>
-        {renderRangeSelector ? (
-          <div className="flex items-center gap-2">
-            {(Object.keys(rangeOptions) as DateRangeKey[]).map((key) => (
-              <Button
-                key={key}
-                type="button"
-                size="sm"
-                variant={dateRange === key ? "default" : "ghost"}
-                className={cn(
-                  "h-9 rounded-full px-3",
-                  dateRange === key ? "shadow-sm" : "text-muted-foreground",
-                )}
-                onClick={() => onDateRangeChange(key)}
-              >
-                {rangeOptions[key].label}
-              </Button>
-            ))}
+        {(renderRangeSelector || headerActions) && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {headerActions}
+            {renderRangeSelector
+              ? (Object.keys(rangeOptions) as DateRangeKey[]).map((key) => (
+                  <Button
+                    key={key}
+                    type="button"
+                    size="sm"
+                    variant={dateRange === key ? "default" : "ghost"}
+                    className={cn(
+                      "h-9 rounded-full px-3",
+                      dateRange === key ? "shadow-sm" : "text-muted-foreground",
+                    )}
+                    onClick={() => onDateRangeChange(key)}
+                  >
+                    {rangeOptions[key].label}
+                  </Button>
+                ))
+              : null}
           </div>
-        ) : null}
+        )}
       </CardHeader>
       <CardContent className="px-2 py-6 sm:px-4">{renderBody()}</CardContent>
     </Card>
