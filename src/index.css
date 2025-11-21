@@ -120,6 +120,36 @@
   }
 }
 
+@keyframes metric-swap {
+  from {
+    transform: translateY(8px);
+    opacity: 0.65;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-metric-swap {
+  animation: metric-swap 220ms ease-out;
+}
+
+@keyframes metric-exit {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}
+
+.animate-metric-exit {
+  animation: metric-exit 220ms ease-in forwards;
+}
+
 @layer components {
   .custom-select-trigger {
     @apply rounded-lg border border-gray-300 px-4;
