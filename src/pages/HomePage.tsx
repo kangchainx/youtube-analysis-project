@@ -26,12 +26,7 @@ import TestimonialsStrip from "@/features/home/testimonials-strip";
 import { getYoutubeApiKey } from "@/lib/config";
 import { searchList } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
-import {
-  ArrowUp,
-  ChevronDown,
-  ChevronUp,
-  MessageCircleQuestionMark,
-} from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronUp, MessageCircleQuestionMark } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import helpGif from "@/assets/gif/help.gif";
@@ -46,22 +41,24 @@ type YouTubeSearchItem = {
   };
 };
 
+const createInitialChannelVideosState = (): ChannelVideosState => ({
+  channelName: "",
+  channelId: "",
+  channelMetadata: null,
+  videos: [],
+  error: null,
+  isLoading: false,
+  isSubscribed: null,
+  isSubscriptionLoading: false,
+});
+
 function HomePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { setProfileNavigationState } = useAppLayout();
   const [suggestions, setSuggestions] = useState<ChannelSuggestion[]>([]);
   const [channelVideosState, setChannelVideosState] =
-    useState<ChannelVideosState>({
-      channelName: "",
-      channelId: "",
-      channelMetadata: null,
-      videos: [],
-      error: null,
-      isLoading: false,
-      isSubscribed: null,
-      isSubscriptionLoading: false,
-    });
+    useState<ChannelVideosState>(createInitialChannelVideosState);
   const searchInputRef = useRef<SearchInputHandle | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [isGlobalSearchEnabled, setIsGlobalSearchEnabled] = useState(false);
@@ -69,6 +66,7 @@ function HomePage() {
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isSearchCollapsed, setIsSearchCollapsed] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [searchSessionKey, setSearchSessionKey] = useState(0);
   const wasDataReadyRef = useRef(false);
   const isHotCommentEffectInitializedRef = useRef(false);
   const originalBodyOverflowRef = useRef<string | null>(null);
@@ -81,9 +79,27 @@ function HomePage() {
     setIsHotCommentsEnabled(checked);
   };
 
+  const handleResetHome = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setChannelVideosState(createInitialChannelVideosState());
+    setSuggestions([]);
+    setIsGlobalSearchEnabled(false);
+    setIsHotCommentsEnabled(false);
+    setIsConfirmDialogOpen(false);
+    setIsSearchCollapsed(false);
+    wasDataReadyRef.current = false;
+    setShowScrollTop(false);
+    setSearchSessionKey((previous) => previous + 1);
+    searchInputRef.current = null;
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
+
   useEffect(() => {
     const locationState =
       (location.state as {
+        resetHome?: boolean;
         restoreSearchState?: ChannelVideosState;
         restoreHotComments?: boolean;
         restoreGlobalSearch?: boolean;
@@ -91,8 +107,13 @@ function HomePage() {
 
     if (!locationState) return;
 
-    const { restoreSearchState, restoreHotComments, restoreGlobalSearch } =
-      locationState;
+    if (locationState.resetHome) {
+      handleResetHome();
+      navigate(location.pathname, { replace: true, state: null });
+      return;
+    }
+
+    const { restoreSearchState, restoreHotComments, restoreGlobalSearch } = locationState;
 
     if (typeof restoreHotComments === "boolean") {
       setIsHotCommentsEnabled(restoreHotComments);
@@ -123,7 +144,7 @@ function HomePage() {
 
     setSuggestions([]);
     navigate(location.pathname, { replace: true, state: null });
-  }, [location.pathname, location.state, navigate]);
+  }, [handleResetHome, location.pathname, location.state, navigate]);
 
   const handleSearch = useCallback(async (query: string) => {
     const trimmed = query.trim();
@@ -348,6 +369,7 @@ function HomePage() {
             <div className="flex w-full items-center justify-center gap-1">
               <div className="w-full max-w-md">
                 <SearchInput
+                  key={searchSessionKey}
                   ref={searchInputRef}
                   onSearch={handleSearch}
                   suggestions={suggestions}
@@ -377,11 +399,11 @@ function HomePage() {
                 </HoverCardContent>
               </HoverCard>
             </div>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="hot-comments-toggle"
-                  checked={isHotCommentsEnabled}
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="hot-comments-toggle"
+                    checked={isHotCommentsEnabled}
                   onCheckedChange={handleHotCommentsToggle}
                 />
                 <Label
