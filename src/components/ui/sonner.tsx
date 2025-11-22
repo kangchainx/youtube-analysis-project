@@ -23,6 +23,8 @@ const Toaster = ({ toastOptions, ...props }: ToasterProps) => {
       toast:
         "group pointer-events-auto mx-auto inline-flex min-w-[120px] max-w-[420px] items-center gap-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm shadow-lg shadow-emerald-100/80 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100",
       content: "text-sm leading-relaxed text-emerald-800 dark:text-emerald-100",
+      description:
+        "text-sm leading-relaxed text-emerald-700 dark:text-emerald-50",
       icon: "mt-0.5 shrink-0 text-emerald-500 dark:text-emerald-300",
       closeButton:
         "text-emerald-500 transition hover:text-emerald-600 dark:text-emerald-200 dark:hover:text-emerald-50",
