@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   frontend:
     build:
@@ -26,7 +24,7 @@ services:
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:?Set GOOGLE_CLIENT_ID to the Google OAuth client ID}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:?Set GOOGLE_CLIENT_SECRET to the Google OAuth client secret}
       - GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
-      - GOOGLE_AUTH_SCOPES=openid,profile,email
+      - GOOGLE_AUTH_SCOPES=openid,profile,email,https://www.googleapis.com/auth/yt-analytics.readonly,https://www.googleapis.com/auth/yt-analytics-monetary.readonly,https://www.googleapis.com/auth/youtube,https://www.googleapis.com/auth/youtubepartner
       - JWT_SECRET=replace-with-a-secure-random-string
       - JWT_EXPIRES_IN=7d
       - SESSION_COOKIE_NAME=ya_session
@@ -40,8 +38,46 @@ services:
       - YOUTUBE_API_KEY=${YOUTUBE_API_KEY:?Set YOUTUBE_API_KEY to your YouTube Data API key}
       - SPOTLIGHT_CHANNEL_HANDLES=NDWTB,xiao_lin_shuo,moyutogether,hellobailu,Leisadventure,WorldwithCK,anzhengming,MaxBookClub,laogao,达叔的财智日记
       - ENABLE_FETCH_PROXY=true
+      - VIDEO_TS_SERVICE_BASE_URL=http://ai-video-transcriber:8000
+      - VIDEO_TS_STREAM_TIMEOUT_MS=900000
+      - MINIO_ENDPOINT=${BACKEND_IMAGE_MINIO_ENDPOINT}
+      - MINIO_PORT=${BACKEND_IMAGE_MINIO_PORT}
+      - MINIO_USE_SSL=${BACKEND_IMAGE_MINIO_USE_SSL}
+      - MINIO_ACCESS_KEY=${BACKEND_IMAGE_MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${BACKEND_IMAGE_MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${BACKEND_IMAGE_MINIO_BUCKET}
+      - MINIO_REGION=${BACKEND_IMAGE_MINIO_REGION}
+      - MINIO_PRESIGN_EXPIRY_SECONDS=${BACKEND_IMAGE_MINIO_PRESIGN_EXPIRY_SECONDS}
+
     expose:
       - "5001"
+    networks:
+      - app-network
+
+  ai-video-transcriber:
+    image: ${AI_VIDEO_TRANSCRIBER_IMAGE:?Set AI_VIDEO_TRANSCRIBER_IMAGE to the container image reference}
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MINIO_ENDPOINT=${AI_VIDEO_MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${AI_VIDEO_MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${AI_VIDEO_MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${AI_VIDEO_MINIO_BUCKET}
+      - MINIO_REGION=${AI_VIDEO_MINIO_REGION}
+      - MINIO_SECURE=${AI_VIDEO_MINIO_SECURE}
+      - MINIO_PREFIX=${AI_VIDEO_MINIO_PREFIX}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
     networks:
       - app-network
 

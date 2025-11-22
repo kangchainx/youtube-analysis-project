@@ -1279,13 +1279,13 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 -z-10 rounded-full bg-gradient-to-r from-primary/30 via-white/20 to-primary/30 opacity-0 blur-[18px] transition-opacity duration-300 group-focus-within:opacity-100"
           />
-          <div className="flex items-center overflow-hidden rounded-full border border-white/20 bg-white/80 backdrop-blur-md shadow-[0_15px_40px_-20px_rgba(15,23,42,0.75)] transition-all duration-300 focus-within:border-white/70 focus-within:bg-white/90 focus-within:shadow-[0_25px_65px_-25px_rgba(15,23,42,0.85)] focus-within:ring-2 focus-within:ring-white/40">
+          <div className="flex items-center overflow-hidden rounded-full border border-white/20 bg-white/80 backdrop-blur-md shadow-[0_15px_40px_-20px_rgba(15,23,42,0.75)] transition-all duration-300 focus-within:border-white/70 focus-within:bg-white/90 focus-within:shadow-[0_25px_65px_-25px_rgba(15,23,42,0.85)] focus-within:ring-2 focus-within:ring-white/40 dark:border-white/10 dark:bg-slate-900/70 dark:shadow-[0_15px_40px_-20px_rgba(0,0,0,0.9)] dark:focus-within:border-primary/50 dark:focus-within:bg-slate-900/80 dark:focus-within:ring-primary/40">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground dark:text-muted-foreground/80" />
               <Input
                 type="search"
                 placeholder="输入频道ID或视频地址进行搜索"
-                className="h-12 rounded-none border-0 bg-transparent pl-11 pr-4 text-base shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="h-12 rounded-none border-0 bg-transparent pl-11 pr-4 text-base shadow-none placeholder:text-muted-foreground/70 focus-visible:border-transparent focus-visible:ring-0 focus-visible:ring-offset-0 dark:text-foreground dark:placeholder:text-muted-foreground/80"
                 value={value}
                 onChange={handleChange}
                 onFocus={() => {
@@ -1299,10 +1299,10 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
               type="submit"
               aria-label="执行搜索"
               disabled={!canSubmit}
-              className="group flex h-12 w-16 items-center justify-center border-l border-white/30 bg-white/50 text-slate-900 backdrop-blur-md transition-all duration-200 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60"
+              className="group flex h-12 w-16 items-center justify-center border-l border-white/30 bg-white/50 text-slate-900 backdrop-blur-md transition-all duration-200 hover:bg-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-60 dark:border-white/10 dark:bg-slate-800/80 dark:text-foreground dark:hover:bg-slate-700/80 dark:focus-visible:ring-primary/50 dark:focus-visible:ring-offset-slate-900"
             >
               <Search
-                className="h-5 w-5 text-slate-900 transition-transform duration-150 group-hover:scale-110 group-hover:text-primary"
+                className="h-5 w-5 text-slate-900 transition-transform duration-150 group-hover:scale-110 group-hover:text-primary dark:text-foreground"
                 aria-hidden="true"
               />
             </button>
