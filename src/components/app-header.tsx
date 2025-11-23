@@ -1,4 +1,4 @@
-import { type MouseEvent } from "react";
+import { type MouseEvent, useEffect } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Home, LayoutDashboard, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
@@ -15,6 +15,13 @@ export function AppHeader({ className }: AppHeaderProps) {
   const { resolvedTheme, setTheme } = useTheme();
   const isOnWorkbench = location.pathname.startsWith("/workbench");
   const activeTheme = resolvedTheme ?? "light";
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("theme");
+    if (!storedTheme) {
+      setTheme("system");
+    }
+  }, [setTheme]);
 
   const handleHomeNav = (event?: MouseEvent) => {
     event?.preventDefault();
