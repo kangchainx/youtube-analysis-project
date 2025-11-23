@@ -5,7 +5,7 @@ import loginIllustration from "@/assets/images/Knowledge-pana.svg";
 function LoginPage() {
   return (
     <div className="flex min-h-svh flex-col items-stretch md:flex-row">
-      <div className="relative flex flex-1 flex-col items-center justify-center gap-10 overflow-hidden border border-gray-200 bg-white p-8 text-gray-800 md:border-0 md:border-r md:p-10">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-10 overflow-hidden border border-border bg-card p-8 text-card-foreground md:border-0 md:border-r md:p-10">
         <img
           src={loginIllustration}
           alt="登录分析插画"
