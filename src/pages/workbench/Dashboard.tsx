@@ -6,6 +6,8 @@ import {
   Eye,
   Film,
   Flag,
+  RefreshCw,
+  Server,
   TrendingUp,
   Users2,
 } from "lucide-react";
@@ -231,6 +233,16 @@ function DashboardPage() {
   const [isChannelLoading, setIsChannelLoading] = useState(false);
   const [channelAvailability, setChannelAvailability] =
     useState<ChannelAvailability>("unknown");
+  const [isServiceLoading, setIsServiceLoading] = useState(true);
+  const [serviceError, setServiceError] = useState<string | null>(null);
+  const [serviceStatus, setServiceStatus] = useState<{
+    online: boolean;
+    message: string;
+    raw?: unknown;
+  } | null>(null);
+  const [serviceRefreshedAt, setServiceRefreshedAt] = useState<number | null>(
+    null,
+  );
 
   const loadChannelInfo = useCallback(async () => {
     if (!hasGoogleAuth) {
@@ -326,12 +338,64 @@ function DashboardPage() {
     void loadChannelInfo();
   }, [loadChannelInfo]);
 
-  const deriveErrorMessage = (caught: unknown) =>
-    caught instanceof ApiError
+  const deriveErrorMessage = useCallback((caught: unknown) => {
+    return caught instanceof ApiError
       ? caught.message
       : caught instanceof Error
         ? caught.message
         : "获取数据失败，请稍后重试。";
+  }, []);
+
+  const parseServiceHealth = useCallback((payload: unknown) => {
+    const container =
+      payload && typeof payload === "object" && "data" in payload
+        ? (payload as { data?: unknown }).data
+        : payload;
+    const statusValue =
+      container &&
+      typeof container === "object" &&
+      "status" in container &&
+      typeof (container as { status?: unknown }).status === "string"
+        ? ((container as { status?: string }).status ?? "").toLowerCase()
+        : null;
+    const okFlag =
+      (container as { ok?: boolean })?.ok ??
+      (container as { healthy?: boolean })?.healthy ??
+      (container as { alive?: boolean })?.alive ??
+      (container as { up?: boolean })?.up ??
+      null;
+    const online =
+      okFlag === true ||
+      (statusValue
+        ? ["ok", "pass", "healthy", "up", "running"].includes(statusValue)
+        : false);
+    const message =
+      (container as { message?: string })?.message ??
+      (typeof statusValue === "string" && statusValue.length
+        ? statusValue
+        : online
+          ? "服务正常"
+          : "服务不可用");
+    return { online, message, raw: container };
+  }, []);
+
+  const fetchServiceStatus = useCallback(async () => {
+    setIsServiceLoading(true);
+    setServiceError(null);
+    try {
+      const response = await apiFetch<{
+        data?: unknown;
+      }>("/api/video-translate/status");
+      const parsed = parseServiceHealth(response);
+      setServiceStatus(parsed);
+      setServiceRefreshedAt(Date.now());
+    } catch (caught) {
+      setServiceError(deriveErrorMessage(caught));
+      setServiceStatus(null);
+    } finally {
+      setIsServiceLoading(false);
+    }
+  }, [deriveErrorMessage, parseServiceHealth]);
 
   const requestAnalytics = useCallback(
     async (
@@ -441,7 +505,7 @@ function DashboardPage() {
         setIsCardLoading(false);
       }
     },
-    [requestAnalytics],
+    [requestAnalytics, deriveErrorMessage],
   );
 
   const fetchChartAnalytics = useCallback(
@@ -492,6 +556,10 @@ function DashboardPage() {
     fetchChartAnalytics,
     hasGoogleAuth,
   ]);
+
+  useEffect(() => {
+    void fetchServiceStatus();
+  }, [fetchServiceStatus]);
 
   const totals = useMemo(() => {
     const accumulator: Record<MetricKey, number> = {
@@ -1024,6 +1092,120 @@ function DashboardPage() {
         title="线性图表"
         description="根据时间范围查看指标曲线"
       />
+
+      <div className="rounded-xl border border-border/60 bg-background p-4 shadow-sm sm:p-6">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="space-y-1">
+            <h2 className="text-lg font-semibold text-foreground">服务列表</h2>
+            <p className="text-sm text-muted-foreground">
+              展示基础服务健康状态，进入仪表盘会自动刷新。
+            </p>
+          </div>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {serviceRefreshedAt ? (
+              <span className="text-xs text-muted-foreground">
+                上次刷新：{new Date(serviceRefreshedAt).toLocaleTimeString()}
+              </span>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              disabled={isServiceLoading}
+              onClick={() => {
+                void fetchServiceStatus();
+              }}
+            >
+              <RefreshCw
+                className={cn(
+                  "h-4 w-4",
+                  isServiceLoading ? "animate-spin" : undefined,
+                )}
+              />
+              刷新
+            </Button>
+          </div>
+        </div>
+
+        {serviceError ? (
+          <p className="mt-3 text-sm text-destructive">{serviceError}</p>
+        ) : null}
+
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Card
+            className={cn(
+              "border-border/70 shadow-sm transition hover:shadow-md",
+              serviceStatus?.online
+                ? "bg-gradient-to-br from-emerald-50 via-white to-white dark:from-emerald-900/30 dark:via-muted dark:to-muted"
+                : "bg-gradient-to-br from-amber-50 via-white to-white dark:from-amber-900/30 dark:via-muted dark:to-muted",
+            )}
+          >
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={cn(
+                      "flex h-10 w-10 items-center justify-center rounded-full border text-foreground shadow-sm",
+                      serviceStatus?.online
+                        ? "border-emerald-200 bg-emerald-50 dark:border-emerald-400/40 dark:bg-emerald-900/30"
+                        : "border-amber-200 bg-amber-50 dark:border-amber-400/40 dark:bg-amber-900/30",
+                    )}
+                  >
+                    <Server
+                      className={cn(
+                        "h-5 w-5",
+                        serviceStatus?.online
+                          ? "text-emerald-600 dark:text-emerald-300"
+                          : "text-amber-600 dark:text-amber-300",
+                      )}
+                    />
+                  </div>
+                  <div>
+                    <CardTitle className="text-sm font-semibold text-foreground">
+                      转写服务
+                    </CardTitle>
+                    <p className="text-xs text-muted-foreground">
+                      /api/video-translate/status
+                    </p>
+                  </div>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-3 py-1 text-xs font-semibold",
+                    serviceStatus?.online
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-200"
+                      : "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-200",
+                  )}
+                >
+                  {isServiceLoading
+                    ? "检测中..."
+                    : serviceStatus?.online
+                      ? "在线"
+                      : "离线"}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2 pt-0">
+              {isServiceLoading ? (
+                <>
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-foreground">
+                    {serviceStatus?.message ?? "尚未获取到服务状态"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    仪表盘加载时自动检测，可随时点击刷新。
+                  </p>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
