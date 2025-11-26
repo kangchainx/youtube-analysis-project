@@ -27,6 +27,56 @@ function isJsonResponse(contentType: string | null): boolean {
   return Boolean(contentType && contentType.includes("application/json"));
 }
 
+const TOKEN_EXPIRED_CODES = new Set(["GOOGLE_TOKEN_EXPIRED"]);
+
+const redirectToLoginIfExpired = (payload: unknown, status: number) => {
+  if (typeof window === "undefined") return;
+
+  const clearCachedSession = () => {
+    try {
+      window.localStorage.removeItem("ya-auth-session");
+    } catch (error) {
+      console.warn("Failed to clear cached session", error);
+    }
+  };
+
+  const errorObject =
+    payload && typeof payload === "object" && "error" in payload
+      ? (payload as { error?: unknown }).error
+      : payload;
+
+  const code =
+    errorObject &&
+    typeof errorObject === "object" &&
+    "code" in errorObject &&
+    typeof (errorObject as { code?: unknown }).code === "string"
+      ? ((errorObject as { code: string }).code || "").toUpperCase()
+      : null;
+
+  if (code && TOKEN_EXPIRED_CODES.has(code)) {
+    clearCachedSession();
+    window.location.assign("/login");
+    return;
+  }
+
+  const message =
+    errorObject &&
+    typeof errorObject === "object" &&
+    "message" in errorObject &&
+    typeof (errorObject as { message?: unknown }).message === "string"
+      ? ((errorObject as { message: string }).message || "").toLowerCase()
+      : null;
+
+  if (
+    status === 401 &&
+    message &&
+    (message.includes("token") || message.includes("登录") || message.includes("access_token"))
+  ) {
+    clearCachedSession();
+    window.location.assign("/login");
+  }
+};
+
 export async function apiFetch<TResponse = unknown>(
   path: string,
   init: RequestInit = {},
@@ -73,6 +123,8 @@ export async function apiFetch<TResponse = unknown>(
             ?.message === "string"
           ? (payload as { error?: { message?: string } }).error!.message!
           : defaultMessage;
+
+    redirectToLoginIfExpired(payload, response.status);
 
     throw new ApiError(message, response.status, payload);
   }
