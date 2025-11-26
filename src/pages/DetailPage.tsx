@@ -54,7 +54,6 @@ import {
 } from "@/components/ui/dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import type { ExportFormat } from "@/lib/video-transcription-api";
 
 const UIButton = ButtonPrimitive.Button;
@@ -171,24 +170,14 @@ const TRANSCRIPTION_EXPORT_FORMATS: Array<{
   description: string;
 }> = [
   {
-    value: "txt",
-    label: "TXT 文本",
-    description: "通用纯文本格式，方便再次编辑或复制。",
-  },
-  {
     value: "markdown",
     label: "Markdown",
     description: "带有基础排版结构，适合文档分享。",
   },
   {
-    value: "docx",
-    label: "Word 文档",
-    description: "可直接在 Office/Docs 中打开修改。",
-  },
-  {
-    value: "pdf",
-    label: "PDF",
-    description: "只读格式，便于直接分发。",
+    value: "txt",
+    label: "TXT 文本",
+    description: "通用纯文本格式，方便再次编辑或复制。",
   },
 ];
 
@@ -288,8 +277,6 @@ function DetailPage(): JSX.Element {
     useState(false);
   const [selectedExportFormat, setSelectedExportFormat] =
     useState<ExportFormat>("txt");
-  const [includeTimestamps, setIncludeTimestamps] = useState(false);
-  const [includeHeader, setIncludeHeader] = useState(false);
   const [subscriptionState, setSubscriptionState] = useState(() => ({
     isSubscribed: Boolean(searchStateSnapshot?.isSubscribed),
     isLoading: searchStateSnapshot?.isSubscriptionLoading ?? false,
@@ -323,8 +310,6 @@ function DetailPage(): JSX.Element {
 
   const resetTranscriptionForm = () => {
     setSelectedExportFormat("txt");
-    setIncludeTimestamps(false);
-    setIncludeHeader(false);
   };
 
   const handleTranscriptionDialogOpenChange = (open: boolean) => {
@@ -427,11 +412,10 @@ function DetailPage(): JSX.Element {
 
     try {
       await enqueueTranscriptionTask({
-        url: videoUrl,
+        videoUrl,
+        videoSource: "youtube",
         title: videoDetail.title,
-        exportFormat: selectedExportFormat,
-        includeTimestamps,
-        includeHeader,
+        outputFormat: selectedExportFormat,
       });
       toast.success("任务已添加至任务中心", {
         description: (
@@ -1248,7 +1232,7 @@ function DetailPage(): JSX.Element {
           <DialogHeader>
             <DialogTitle>转文字</DialogTitle>
             <DialogDescription>
-              选择导出格式及选项，确认后自动创建转文字任务。
+              选择导出格式后确认，即可创建转文字任务。
             </DialogDescription>
           </DialogHeader>
 
@@ -1289,47 +1273,6 @@ function DetailPage(): JSX.Element {
                   ))}
                 </RadioGroup>
               </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
-                  <div className="flex-1 space-y-0.5 pr-4">
-                    <Label
-                      htmlFor="include-timestamps"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      包含时间戳
-                    </Label>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      在每段文本前保留字幕时间码，便于定位。
-                    </p>
-                  </div>
-                  <Switch
-                    id="include-timestamps"
-                    checked={includeTimestamps}
-                    onCheckedChange={setIncludeTimestamps}
-                    disabled={isCreatingTranscription}
-                  />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/30 px-4 py-3.5 transition-colors hover:bg-muted/40">
-                  <div className="flex-1 space-y-0.5 pr-4">
-                    <Label
-                      htmlFor="include-header"
-                      className="text-sm font-medium cursor-pointer"
-                    >
-                      包含头部信息
-                    </Label>
-                    <p className="text-xs leading-relaxed text-muted-foreground">
-                      在开头附上视频标题、链接等元信息。
-                    </p>
-                  </div>
-                  <Switch
-                    id="include-header"
-                    checked={includeHeader}
-                    onCheckedChange={setIncludeHeader}
-                    disabled={isCreatingTranscription}
-                  />
-                </div>
-              </div>
             </div>
 
             <DialogFooter className="gap-2 sm:gap-0">
@@ -1338,7 +1281,7 @@ function DetailPage(): JSX.Element {
                   type="button"
                   variant="outline"
                   disabled={isCreatingTranscription}
-                  className="min-w-[100px]"
+                  className="min-w-[110px] rounded-full border-border/80 bg-muted/40 px-5 py-2 text-sm font-medium shadow-sm transition hover:bg-muted/60"
                 >
                   取消
                 </UIButton>
@@ -1346,7 +1289,7 @@ function DetailPage(): JSX.Element {
               <UIButton
                 type="submit"
                 disabled={isCreatingTranscription}
-                className="min-w-[120px]"
+                className="min-w-[140px] rounded-full px-6 py-2.5 text-sm font-semibold shadow-md transition hover:shadow-lg"
               >
                 {isCreatingTranscription ? (
                   <>

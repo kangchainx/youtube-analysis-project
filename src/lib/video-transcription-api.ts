@@ -1,76 +1,55 @@
 import { API_BASE_URL, apiFetch } from "@/lib/api-client";
 
-export type ExportFormat = "markdown" | "txt" | "docx" | "pdf";
+export type ExportFormat = "markdown" | "txt";
 
 export type TaskStatus = "pending" | "processing" | "completed" | "failed" | string;
 
 export type CreateTranscriptionTaskRequest = {
-  url: string;
-  summaryLanguage?: string;
-  exportFormat?: ExportFormat;
-  includeTimestamps?: boolean;
-  includeHeader?: boolean;
+  videoUrl: string;
+  videoSource?: string;
+  language?: string;
+  outputFormat?: ExportFormat;
 };
 
-export type CreateTranscriptionTaskResponse = {
-  id: string;
-  taskId: string;
-  status: TaskStatus;
-  message?: string;
-};
+export type CreateTranscriptionTaskResponse = TaskStatusResponse;
 
 type CreateTaskEnvelope = {
   data?: CreateTranscriptionTaskResponse;
 };
 
+export type TaskDetailFile = {
+  fileName: string;
+  downloadUrl?: string;
+  fileSize?: number;
+  format?: string | null;
+  language?: string | null;
+};
+
 export type TaskStatusResponse = {
-  id: string;
+  id?: string;
   taskId: string;
-  videoSource: string;
-  videoSourceUrl: string;
   status: TaskStatus;
   progress: number | null;
+  message?: string | null;
+  rawStatus?: string | null;
+  files?: TaskDetailFile[];
+  details?: TaskDetailFile[];
+  createdAt?: string;
+  updatedAt?: string;
+  videoUrl?: string | null;
+  videoSource?: string | null;
+  videoSourceUrl?: string | null;
   progressMessage?: string | null;
   progress_message?: string | null;
   errorMessage?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
 };
 
 type TaskStatusEnvelope = {
   data?: TaskStatusResponse;
 };
 
-export type TaskDetailFile = {
-  id: number | string;
-  vttId: string;
-  fileName: string;
-  filePath: string;
-  fileSize: number;
-  fileFormat: string;
-  detectedLanguage?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
-
-type TaskDetailsEnvelope = {
-  data?: TaskDetailFile[];
-};
-
-export type TaskListRecord = {
-  id: string;
-  taskId: string;
-  status: TaskStatus;
-  progress: number | null;
-  errorMessage?: string | null;
-  progressMessage?: string | null;
-  progress_message?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
+export type TaskListRecord = TaskStatusResponse & {
   title?: string | null;
-  videoSource?: string | null;
-  videoSourceUrl?: string | null;
-  details?: TaskDetailFile[];
 };
 
 export type TaskListMeta = {
@@ -96,15 +75,8 @@ export type FetchTasksParams = {
   status?: TaskStatus | TaskStatus[];
 };
 
-export type TaskStreamUpdate = {
+export type TaskStreamUpdate = TaskStatusResponse & {
   taskRecordId?: string;
-  taskId: string;
-  status: TaskStatus;
-  progress: number | null;
-  progressMessage?: string | null;
-  progress_message?: string | null;
-  errorMessage?: string | null;
-  updatedAt?: string;
 };
 
 export type TaskStreamHandlers = {
@@ -115,21 +87,16 @@ export type TaskStreamHandlers = {
 
 type DownloadUrlEnvelope = {
   data?: {
+    taskId?: string;
     url?: string;
+    fileName?: string;
+    format?: string;
+    fileSize?: number;
+    language?: string;
   };
 };
 
-const DEFAULT_SUMMARY_LANGUAGE = "zh";
-const DEFAULT_EXPORT_FORMAT: ExportFormat = "markdown";
-
-const normalizeBoolean = (value: boolean | string | undefined, fallback: boolean) => {
-  // 后端布尔字段既支持布尔也支持 "true"/"false"，这里做统一归一化
-  if (value === undefined) return fallback;
-  if (typeof value === "string") {
-    return value.toLowerCase() === "true";
-  }
-  return Boolean(value);
-};
+const DEFAULT_OUTPUT_FORMAT: ExportFormat = "txt";
 
 const ensureData = <T>(envelope: { data?: T } | T | null | undefined, errorMessage: string): T => {
   // 后端有时直接返回数据，有时包一层 data，这里统一抽取并在缺失时抛出语义化错误
@@ -145,23 +112,67 @@ const ensureData = <T>(envelope: { data?: T } | T | null | undefined, errorMessa
   throw new Error(errorMessage);
 };
 
+const normalizeFiles = (files?: TaskDetailFile[] | null): TaskDetailFile[] => {
+  if (!files || !Array.isArray(files)) return [];
+  return files.map((file) => ({
+    ...file,
+    fileSize: typeof file.fileSize === "number" ? file.fileSize : Number(file.fileSize) || undefined,
+    format: file.format ?? (file as { fileFormat?: string }).fileFormat ?? null,
+    language: file.language ?? null,
+  }));
+};
+
+const normalizeTaskPayload = (payload: TaskStatusResponse): TaskStatusResponse => {
+  const files = normalizeFiles(payload.files ?? payload.details);
+  const normalizedMessage =
+    payload.message ??
+    payload.progressMessage ??
+    payload.progress_message ??
+    payload.errorMessage ??
+    null;
+  const progressMessage =
+    payload.progressMessage ?? payload.progress_message ?? normalizedMessage;
+  const errorMessage =
+    payload.errorMessage ??
+    (payload.status === "failed" ? normalizedMessage : null) ??
+    null;
+  const resolvedVideoUrl = payload.videoSourceUrl ?? payload.videoUrl ?? null;
+
+  return {
+    ...payload,
+    progress: payload.progress ?? null,
+    message: normalizedMessage,
+    progressMessage,
+    progress_message: payload.progress_message ?? null,
+    errorMessage,
+    files,
+    details: files,
+    videoUrl: payload.videoUrl ?? resolvedVideoUrl,
+    videoSourceUrl: payload.videoSourceUrl ?? resolvedVideoUrl,
+  };
+};
+
 export async function createTranscriptionTask(
   payload: CreateTranscriptionTaskRequest,
 ): Promise<CreateTranscriptionTaskResponse> {
-  if (!payload.url?.trim()) {
-    throw new Error("url is required to create a transcription task.");
+  const videoUrl = payload.videoUrl?.trim();
+  if (!videoUrl) {
+    throw new Error("videoUrl is required to create a transcription task.");
   }
 
-  const body = {
-    url: payload.url.trim(),
-    summary_language: payload.summaryLanguage ?? DEFAULT_SUMMARY_LANGUAGE,
-    export_format: payload.exportFormat ?? DEFAULT_EXPORT_FORMAT,
-    export_include_timestamps: normalizeBoolean(payload.includeTimestamps, true),
-    export_include_header: normalizeBoolean(payload.includeHeader, false),
+  const body: Record<string, unknown> = {
+    videoUrl,
+    output_format: payload.outputFormat ?? DEFAULT_OUTPUT_FORMAT,
   };
 
-  // 创建任务时参数需要符合后端的 snake_case 字段命名，这里一次性转换
-  const response = await apiFetch<CreateTaskEnvelope>("/api/video-transcription", {
+  if (payload.videoSource?.trim()) {
+    body.videoSource = payload.videoSource.trim();
+  }
+  if (payload.language?.trim()) {
+    body.language = payload.language.trim();
+  }
+
+  const response = await apiFetch<CreateTaskEnvelope>("/api/video-translate/tasks", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -170,10 +181,14 @@ export async function createTranscriptionTask(
   });
 
   const data = ensureData(response, "创建任务失败，请稍后重试。");
-  if (!data?.taskId || !data?.id) {
+  if (!data?.taskId) {
     throw new Error("创建任务失败，缺少任务标识。");
   }
-  return data;
+
+  return normalizeTaskPayload({
+    ...data,
+    progress: data.progress ?? null,
+  });
 }
 
 export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse> {
@@ -182,27 +197,17 @@ export async function getTaskStatus(taskId: string): Promise<TaskStatusResponse>
   }
 
   const response = await apiFetch<TaskStatusEnvelope>(
-    `/api/video-transcription/task?task_id=${encodeURIComponent(taskId)}`,
+    `/api/video-translate/tasks/${encodeURIComponent(taskId)}`,
   );
 
   const data = ensureData(response, "获取任务状态失败。");
   if (!data?.taskId) {
     throw new Error("任务状态数据异常，缺少标识。");
   }
-  return data;
-}
-
-export async function getTaskDetails(vttId: string): Promise<TaskDetailFile[]> {
-  if (!vttId) {
-    throw new Error("vttId is required.");
-  }
-
-  const response = await apiFetch<TaskDetailsEnvelope>(
-    `/api/video-transcription/details?vtt_id=${encodeURIComponent(vttId)}`,
-  );
-
-  const data = ensureData(response, "获取任务文件失败。");
-  return Array.isArray(data) ? data : [];
+  return normalizeTaskPayload({
+    ...data,
+    progress: data.progress ?? null,
+  });
 }
 
 export async function fetchTranscriptionTasks(
@@ -213,6 +218,7 @@ export async function fetchTranscriptionTasks(
   const pageSize = params.pageSize ?? 20;
   if (page > 0) searchParams.set("page", String(page));
   if (pageSize > 0) searchParams.set("page_size", String(pageSize));
+  if (pageSize > 0) searchParams.set("pageSize", String(pageSize));
 
   const statuses = Array.isArray(params.status)
     ? params.status
@@ -222,20 +228,29 @@ export async function fetchTranscriptionTasks(
   statuses.forEach((status) => {
     if (status) {
       searchParams.append("status", status);
+      searchParams.append("task_status", status);
+      searchParams.append("taskStatus", status);
     }
   });
 
   const query = searchParams.toString();
   const response = await apiFetch<PaginatedTaskEnvelope>(
-    `/api/video-transcription/tasks${query ? `?${query}` : ""}`,
+    `/api/video-translate/tasks${query ? `?${query}` : ""}`,
   );
 
   if (!response?.meta) {
     throw new Error("任务列表响应缺少 meta 字段。");
   }
 
+  const normalizedData = (response.data ?? []).map((record) =>
+    normalizeTaskPayload({
+      ...record,
+      progress: record.progress ?? null,
+    }),
+  );
+
   return {
-    data: response.data ?? [],
+    data: normalizedData,
     meta: response.meta,
   };
 }
@@ -254,6 +269,7 @@ export async function fetchCompletedTasksWithDetails(
   const pageSize = params.pageSize ?? 20;
   if (page > 0) searchParams.set("page", String(page));
   if (pageSize > 0) searchParams.set("page_size", String(pageSize));
+  if (pageSize > 0) searchParams.set("pageSize", String(pageSize));
   const statuses = Array.isArray(params.status)
     ? params.status
     : params.status
@@ -262,20 +278,49 @@ export async function fetchCompletedTasksWithDetails(
   statuses.forEach((status) => {
     if (status) {
       searchParams.append("status", status);
+      searchParams.append("task_status", status);
+      searchParams.append("taskStatus", status);
     }
   });
 
   const response = await apiFetch<PaginatedTaskEnvelope>(
-    `/api/video-transcription/tasks/details${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
+    `/api/video-translate/tasks/details${searchParams.toString() ? `?${searchParams.toString()}` : ""}`,
   );
 
   if (!response?.meta) {
     throw new Error("任务详情列表响应缺少 meta 字段。");
   }
 
+  const normalizedData = (response.data ?? []).map((record) =>
+    normalizeTaskPayload({
+      ...record,
+      progress: record.progress ?? null,
+    }),
+  );
+
+  const recordsWithFiles = await Promise.all(
+    normalizedData.map(async (record) => {
+      if (record.files?.length || record.details?.length) {
+        return record;
+      }
+      try {
+        const status = await getTaskStatus(record.taskId);
+        if (status.files?.length) {
+          return {
+            ...record,
+            ...status,
+          };
+        }
+      } catch (error) {
+        console.warn("Failed to fetch task details", record.taskId, error);
+      }
+      return record;
+    }),
+  );
+
   return {
-    data: response.data ?? [],
-    meta: response.meta,
+    data: recordsWithFiles,
+    meta: response.meta as TaskListMeta,
   };
 }
 
@@ -287,8 +332,7 @@ export function subscribeToTaskStream(
     return () => undefined;
   }
 
-  // 使用 SSE 持续监听指定任务的状态流，返回清理函数用于组件卸载
-  const url = `${API_BASE_URL}/api/video-transcription/task/stream?task_id=${encodeURIComponent(taskId)}`;
+  const url = `${API_BASE_URL}/api/video-translate/tasks/${encodeURIComponent(taskId)}/stream`;
   const eventSource = new EventSource(url, { withCredentials: true });
 
   const parseEvent = <T>(event: MessageEvent): T | null => {
@@ -303,14 +347,14 @@ export function subscribeToTaskStream(
   const snapshotListener = (event: MessageEvent) => {
     const payload = parseEvent<TaskStatusResponse>(event);
     if (payload) {
-      handlers.onSnapshot?.(payload);
+      handlers.onSnapshot?.(normalizeTaskPayload(payload));
     }
   };
 
   const updateListener = (event: MessageEvent) => {
     const payload = parseEvent<TaskStreamUpdate>(event);
     if (payload) {
-      handlers.onUpdate?.(payload);
+      handlers.onUpdate?.(normalizeTaskPayload(payload));
     }
   };
 
@@ -331,15 +375,12 @@ export function subscribeToTaskStream(
   };
 }
 
-export async function getTranscriptDownloadUrl(
-  taskId: string,
-  fileName: string,
-): Promise<string> {
-  if (!taskId || !fileName) {
-    throw new Error("taskId 和 fileName 不能为空");
+export async function getTranscriptDownloadUrl(taskId: string): Promise<string> {
+  if (!taskId) {
+    throw new Error("taskId 不能为空");
   }
   const response = await apiFetch<DownloadUrlEnvelope>(
-    `/api/video-transcription/download-url?task_id=${encodeURIComponent(taskId)}&file_name=${encodeURIComponent(fileName)}`,
+    `/api/video-translate/tasks/${encodeURIComponent(taskId)}/download-url`,
   );
   const url = response?.data?.url;
   if (!url) {

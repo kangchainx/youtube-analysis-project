@@ -19,20 +19,20 @@ type CreateTaskOptions = CreateTranscriptionTaskRequest & {
   title: string;
 };
 
+const DEFAULT_VIDEO_SOURCE = "youtube";
+
 export type TranscriptionTaskItem = {
   id: string;
   taskId: string;
-  vttId?: string;
   title: string;
   status: TaskStatus;
   progress: number | null;
   createdAt: number;
   updatedAt: number;
   sourceUrl: string;
-  summaryLanguage?: string;
-  exportFormat?: CreateTranscriptionTaskRequest["exportFormat"];
-  includeTimestamps?: boolean;
-  includeHeader?: boolean;
+  videoSource?: string;
+  language?: string;
+  outputFormat?: CreateTranscriptionTaskRequest["outputFormat"];
   files: TaskDetailFile[];
   message?: string | null;
   error?: string | null;
@@ -104,17 +104,15 @@ export function TranscriptionTasksProvider({
           current ?? {
             id: taskId,
             taskId,
-            vttId: status.id,
-            title: "转录任务",
+            title: status.videoSource ?? "转录任务",
             status: "pending",
             progress: null,
             createdAt: serverCreatedAt ?? now,
             updatedAt: now,
-            sourceUrl: status.videoSourceUrl ?? "",
-            summaryLanguage: undefined,
-            exportFormat: undefined,
-            includeHeader: undefined,
-            includeTimestamps: undefined,
+            sourceUrl: status.videoUrl ?? status.videoSourceUrl ?? "",
+            videoSource: status.videoSource ?? undefined,
+            language: undefined,
+            outputFormat: undefined,
             files: [],
             message: null,
             error: null,
@@ -124,19 +122,23 @@ export function TranscriptionTasksProvider({
         const progress =
           normalizeProgress(status.progress) ??
           (resolvedStatus === "completed" ? 100 : baseTask.progress ?? null);
+        const files = status.files ?? status.details ?? baseTask.files;
 
         return {
           ...baseTask,
           taskId,
-          vttId: status.id ?? baseTask.vttId,
           status: resolvedStatus,
           progress,
           createdAt: baseTask.createdAt ?? serverCreatedAt ?? now,
           updatedAt: serverUpdatedAt ?? now,
-          sourceUrl: status.videoSourceUrl || baseTask.sourceUrl,
+          sourceUrl:
+            status.videoUrl ?? status.videoSourceUrl ?? baseTask.sourceUrl,
+          videoSource: status.videoSource ?? baseTask.videoSource,
+          files,
+          message: status.message ?? baseTask.message,
           error:
             resolvedStatus === "failed"
-              ? status.errorMessage ?? baseTask.error ?? "任务失败"
+              ? status.message ?? status.errorMessage ?? baseTask.error ?? "任务失败"
               : null,
         };
       });
@@ -163,32 +165,34 @@ export function TranscriptionTasksProvider({
       setIsCreating(true);
       try {
         const response = await createTranscriptionTask({
-          url: options.url,
-          summaryLanguage: options.summaryLanguage,
-          exportFormat: options.exportFormat,
-          includeHeader: options.includeHeader,
-          includeTimestamps: options.includeTimestamps,
+          videoUrl: options.videoUrl,
+          videoSource: options.videoSource ?? DEFAULT_VIDEO_SOURCE,
+          language: options.language,
+          outputFormat: options.outputFormat,
         });
         const taskId = response.taskId;
         const initialStatus = (response.status as TaskStatus) || "processing";
+        const initialProgress =
+          normalizeProgress(response.progress) ??
+          (initialStatus === "completed" ? 100 : 0);
         const now = Date.now();
         const newTask: TranscriptionTaskItem = {
           id: taskId,
           taskId,
-          vttId: response.id,
           title: options.title || "转录任务",
           status: initialStatus,
-          progress: initialStatus === "completed" ? 100 : 0,
+          progress: initialProgress,
           createdAt: now,
           updatedAt: now,
-          sourceUrl: options.url,
-          summaryLanguage: options.summaryLanguage,
-          exportFormat: options.exportFormat,
-          includeHeader: options.includeHeader,
-          includeTimestamps: options.includeTimestamps,
-          files: [],
+          sourceUrl: response.videoUrl ?? options.videoUrl,
+          videoSource:
+            response.videoSource ?? options.videoSource ?? DEFAULT_VIDEO_SOURCE,
+          language: options.language,
+          outputFormat: options.outputFormat,
+          files: response.files ?? response.details ?? [],
           message: response.message ?? null,
-          error: null,
+          error:
+            initialStatus === "failed" ? response.message ?? null : null,
         };
         setTasksMap((previous) => ({
           ...previous,

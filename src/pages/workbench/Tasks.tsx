@@ -90,6 +90,7 @@ type TaskListItem = {
   updatedAt: number;
   title: string;
   videoSource?: string | null;
+  videoUrl?: string | null;
   videoSourceUrl?: string | null;
   details?: TaskDetailFile[];
 };
@@ -156,23 +157,35 @@ const formatFileSize = (size?: number) => {
 };
 
 function mapTaskRecord(record: TaskListRecord): TaskListItem {
-  const progressMessage =
+  const rawProgressMessage =
+    record.message ??
     record.progressMessage ??
     (record as { progress_message?: string | null }).progress_message ??
+    record.errorMessage ??
     null;
+  const progressMessage =
+    typeof rawProgressMessage === "string"
+      ? rawProgressMessage.trim() || null
+      : rawProgressMessage;
+  const videoUrl = record.videoSourceUrl ?? record.videoUrl ?? null;
+  const details = record.details ?? record.files;
   return {
     id: record.id ?? record.taskId,
     taskId: record.taskId ?? record.id,
     status: record.status,
     progress: normalizeProgress(record.progress),
     progressMessage,
-    errorMessage: record.errorMessage ?? null,
+    errorMessage:
+      record.errorMessage ??
+      (record.status === "failed" ? progressMessage : null) ??
+      null,
     createdAt: parseTimestamp(record.createdAt),
     updatedAt: parseTimestamp(record.updatedAt),
     title: record.title ?? record.videoSource ?? record.taskId,
     videoSource: record.videoSource ?? record.title ?? record.taskId,
-    videoSourceUrl: record.videoSourceUrl ?? null,
-    details: record.details,
+    videoUrl,
+    videoSourceUrl: videoUrl,
+    details,
   };
 }
 
@@ -284,10 +297,13 @@ function TasksPage() {
             status: TAB_CONFIG[tabKey].statuses,
           });
 
-          const normalizedItems = response.data.map((record) => ({
-            ...mapTaskRecord(record),
-            details: record.details ?? [],
-          }));
+          const normalizedItems = response.data.map((record) => {
+            const mapped = mapTaskRecord(record);
+            return {
+              ...mapped,
+              details: mapped.details ?? [],
+            };
+          });
           const filteredItems = filterRecordsByStatus(
             normalizedItems,
             TAB_CONFIG[tabKey].statuses,
@@ -383,17 +399,25 @@ function TasksPage() {
         "updatedAt" in payload ? payload.updatedAt : undefined,
       );
       const rawProgressMessage =
+        ("message" in payload ? payload.message : undefined) ??
         ("progressMessage" in payload ? payload.progressMessage : undefined) ??
         (payload as { progress_message?: string | null }).progress_message ??
+        ("errorMessage" in payload ? payload.errorMessage : undefined) ??
         null;
       const progressMessage =
         typeof rawProgressMessage === "string"
           ? rawProgressMessage.trim() || null
           : rawProgressMessage;
       const errorMessage =
-        "errorMessage" in payload && payload.errorMessage
-          ? payload.errorMessage
+        status === "failed"
+          ? (("errorMessage" in payload && payload.errorMessage) ||
+              progressMessage ||
+              null)
           : null;
+      const files =
+        ("files" in payload && payload.files) ||
+        ("details" in payload && payload.details) ||
+        undefined;
 
       setTabStates((previous) => {
         const currentItems = previous.inProgress.items;
@@ -417,6 +441,11 @@ function TasksPage() {
             progressMessage !== null
               ? progressMessage
               : nextItems[index].progressMessage,
+          videoSourceUrl:
+            ("videoSourceUrl" in payload && payload.videoSourceUrl) ||
+            ("videoUrl" in payload && payload.videoUrl) ||
+            nextItems[index].videoSourceUrl,
+          details: files ?? nextItems[index].details,
         };
         if (FINAL_STATUSES.has(status)) {
           nextItems.splice(index, 1);
@@ -499,11 +528,11 @@ function TasksPage() {
   }, []);
 
   const handleDownload = useCallback(
-    async (taskId: string, fileName: string) => {
-      const downloadKey = `${taskId}:${fileName}`;
+    async (taskId: string, file?: TaskDetailFile) => {
+      const downloadKey = `${taskId}:${file?.fileName ?? "default"}`;
       setDownloadingFileKey(downloadKey);
       try {
-        const url = await getTranscriptDownloadUrl(taskId, fileName);
+        const url = file?.downloadUrl ?? (await getTranscriptDownloadUrl(taskId));
         if (typeof window !== "undefined") {
           window.open(url, "_blank", "noopener,noreferrer");
         }
@@ -590,11 +619,11 @@ function TasksPage() {
   const renderFileField = (
     details: TaskDetailFile[] | undefined,
     field: "name" | "size" | "format",
-    options?: { className?: string },
-  ): ReactNode => {
-    const file = details?.[0];
-    if (!file) {
-      return <span className="text-sm text-muted-foreground">-</span>;
+  options?: { className?: string },
+): ReactNode => {
+  const file = details?.[0];
+  if (!file) {
+    return <span className="text-sm text-muted-foreground">-</span>;
     }
     if (field === "name") {
       return (
@@ -611,9 +640,11 @@ function TasksPage() {
         </span>
       );
     }
+    const format =
+      (file as { fileFormat?: string }).fileFormat ?? file.format ?? null;
     return (
       <span className="text-sm text-foreground">
-        {file.fileFormat ? file.fileFormat.toUpperCase() : "-"}
+        {format ? format.toUpperCase() : "-"}
       </span>
     );
   };
@@ -782,7 +813,7 @@ function TasksPage() {
                         size="sm"
                         disabled={isDownloading}
                         onClick={() =>
-                          handleDownload(task.taskId, primaryFile.fileName)
+                          handleDownload(task.taskId, primaryFile)
                         }
                       >
                         {isDownloading ? "获取链接..." : "下载"}
