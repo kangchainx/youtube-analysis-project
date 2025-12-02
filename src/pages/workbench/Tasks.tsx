@@ -275,6 +275,7 @@ function TasksPage() {
   }, [tabStates]);
 
   const streamCleanupRef = useRef<Map<string, () => void>>(new Map());
+  const forceStreamRestartRef = useRef(false);
 
   const fetchTabData = useCallback(
     async (tabKey: TaskTabKey, pageOverride?: number) => {
@@ -367,17 +368,6 @@ function TasksPage() {
     void fetchTabData("inProgress", 1);
   }, [fetchTabData]);
 
-  const handleTabChange = useCallback(
-    (tabKey: TaskTabKey) => {
-      setActiveTab(tabKey);
-      const state = tabStatesRef.current[tabKey];
-      if (!state.initialized) {
-        void fetchTabData(tabKey, 1);
-      }
-    },
-    [fetchTabData],
-  );
-
   const handlePageChange = useCallback(
     (tabKey: TaskTabKey, nextPage: number) => {
       if (nextPage < 1) return;
@@ -387,6 +377,9 @@ function TasksPage() {
   );
 
   const handleRefresh = useCallback(() => {
+    if (activeTab === "inProgress") {
+      forceStreamRestartRef.current = true;
+    }
     const currentPage = tabStatesRef.current[activeTab].page ?? 1;
     void fetchTabData(activeTab, currentPage);
   }, [activeTab, fetchTabData]);
@@ -487,9 +480,14 @@ function TasksPage() {
   );
 
   const ensureStreamForTask = useCallback(
-    (task: TaskListItem) => {
+    (task: TaskListItem, options?: { forceRestart?: boolean }) => {
       if (FINAL_STATUSES.has(task.status)) return;
-      if (streamCleanupRef.current.has(task.taskId)) return;
+
+      const existingCleanup = streamCleanupRef.current.get(task.taskId);
+      if (existingCleanup) {
+        if (!options?.forceRestart) return;
+        existingCleanup();
+      }
 
       const unsubscribe = subscribeToTaskStream(task.taskId, {
         onSnapshot: applyStreamUpdate,
@@ -504,21 +502,54 @@ function TasksPage() {
     [applyStreamUpdate],
   );
 
-  useEffect(() => {
-    tabStates.inProgress.items.forEach((task) => {
-      ensureStreamForTask(task);
-    });
+  const syncInProgressStreams = useCallback(
+    (tasks: TaskListItem[], options?: { forceRestart?: boolean }) => {
+      const activeTaskIds = new Set<string>();
 
-    const currentTaskIds = new Set(
-      tabStates.inProgress.items.map((task) => task.taskId),
-    );
-    streamCleanupRef.current.forEach((cleanup, taskId) => {
-      if (!currentTaskIds.has(taskId)) {
-        cleanup();
-        streamCleanupRef.current.delete(taskId);
+      tasks.forEach((task) => {
+        if (FINAL_STATUSES.has(task.status)) return;
+        activeTaskIds.add(task.taskId);
+        ensureStreamForTask(task, options);
+      });
+
+      streamCleanupRef.current.forEach((cleanup, taskId) => {
+        if (!activeTaskIds.has(taskId)) {
+          cleanup();
+          streamCleanupRef.current.delete(taskId);
+        }
+      });
+    },
+    [ensureStreamForTask],
+  );
+
+  useEffect(() => {
+    const forceRestart = forceStreamRestartRef.current;
+    if (forceRestart) {
+      forceStreamRestartRef.current = false;
+    }
+    syncInProgressStreams(tabStates.inProgress.items, { forceRestart });
+  }, [tabStates.inProgress.items, syncInProgressStreams]);
+
+  const handleTabChange = useCallback(
+    (tabKey: TaskTabKey) => {
+      setActiveTab(tabKey);
+      const state = tabStatesRef.current[tabKey];
+      if (tabKey === "inProgress") {
+        if (state.initialized) {
+          syncInProgressStreams(state.items, { forceRestart: true });
+          forceStreamRestartRef.current = false;
+        } else {
+          forceStreamRestartRef.current = true;
+          void fetchTabData(tabKey, 1);
+        }
+        return;
       }
-    });
-  }, [tabStates.inProgress.items, ensureStreamForTask]);
+      if (!state.initialized) {
+        void fetchTabData(tabKey, 1);
+      }
+    },
+    [fetchTabData, syncInProgressStreams],
+  );
 
   useEffect(() => {
     return () => {
