@@ -1308,7 +1308,7 @@ const SearchInput = forwardRef<SearchInputHandle, SearchInputProps>(
             </button>
           </div>
           {showSuggestions ? (
-            <ul className="absolute left-0 right-0 top-full z-10 mt-2 overflow-hidden rounded-lg border bg-background shadow-lg">
+            <ul className="absolute left-0 right-0 top-full z-10 mt-2 max-h-[29vh] overflow-hidden overflow-y-auto rounded-lg border bg-background shadow-lg [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {suggestions.map((suggestion) => (
                 <li key={suggestion.channelId}>
                   <button
