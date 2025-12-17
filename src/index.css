@@ -150,6 +150,41 @@
   animation: metric-exit 220ms ease-in forwards;
 }
 
+@keyframes keyword-cloud-fade {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes keyword-cloud-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(var(--kw-float-distance, -3px));
+  }
+}
+
+.animate-keyword-cloud {
+  animation:
+    keyword-cloud-fade 420ms ease-out var(--kw-delay, 0ms) both,
+    keyword-cloud-float var(--kw-float-duration, 7.5s) ease-in-out
+      var(--kw-delay, 0ms) infinite;
+  will-change: transform, opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-keyword-cloud {
+    animation: none;
+  }
+}
+
 @layer components {
   .custom-select-trigger {
     @apply rounded-lg border border-gray-300 px-4;
