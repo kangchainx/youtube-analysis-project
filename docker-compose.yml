@@ -54,30 +54,85 @@ services:
     networks:
       - app-network
 
-  ai-video-transcriber:
-    image: ${AI_VIDEO_TRANSCRIBER_IMAGE:?Set AI_VIDEO_TRANSCRIBER_IMAGE to the container image reference}
+  # ai-video-transcriber:
+  #   image: ${AI_VIDEO_TRANSCRIBER_IMAGE:?Set AI_VIDEO_TRANSCRIBER_IMAGE to the container image reference}
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
+  #     - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+  #     - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
+  #     - HOST=0.0.0.0
+  #     - PORT=8000
+  #     - MINIO_ENDPOINT=${AI_VIDEO_MINIO_ENDPOINT}
+  #     - MINIO_ACCESS_KEY=${AI_VIDEO_MINIO_ACCESS_KEY}
+  #     - MINIO_SECRET_KEY=${AI_VIDEO_MINIO_SECRET_KEY}
+  #     - MINIO_BUCKET=${AI_VIDEO_MINIO_BUCKET}
+  #     - MINIO_REGION=${AI_VIDEO_MINIO_REGION}
+  #     - MINIO_SECURE=${AI_VIDEO_MINIO_SECURE}
+  #     - MINIO_PREFIX=${AI_VIDEO_MINIO_PREFIX}
+  #   restart: unless-stopped
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 2G
+  #       reservations:
+  #         memory: 1G
+  #   networks:
+  #     - app-network
+
+  video-transcriber:
+    image: ${VIDEO_IMAGE_TRANSCRIBER_IMAGE:?Set VIDEO_IMAGE_TRANSCRIBER_IMAGE to the video-transcriber container image reference}
     ports:
-      - "8000:8000"
+      - "8001:8000"
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_api_key_here}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-base}
-      - HOST=0.0.0.0
-      - PORT=8000
-      - MINIO_ENDPOINT=${AI_VIDEO_MINIO_ENDPOINT}
-      - MINIO_ACCESS_KEY=${AI_VIDEO_MINIO_ACCESS_KEY}
-      - MINIO_SECRET_KEY=${AI_VIDEO_MINIO_SECRET_KEY}
-      - MINIO_BUCKET=${AI_VIDEO_MINIO_BUCKET}
-      - MINIO_REGION=${AI_VIDEO_MINIO_REGION}
-      - MINIO_SECURE=${AI_VIDEO_MINIO_SECURE}
-      - MINIO_PREFIX=${AI_VIDEO_MINIO_PREFIX}
+      # 数据库配置（生产环境）
+      - DATABASE_URL=${VIDEO_IMAGE_DATABASE_URL}
+
+      # Minio 配置
+      - MINIO_ENDPOINT=${VIDEO_IMAGE_MINIO_ENDPOINT}
+      - MINIO_ACCESS_KEY=${VIDEO_IMAGE_MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${VIDEO_IMAGE_MINIO_SECRET_KEY}
+      - MINIO_BUCKET=${VIDEO_IMAGE_MINIO_BUCKET}
+      - MINIO_REGION=${VIDEO_IMAGE_MINIO_REGION}
+      - MINIO_SECURE=${VIDEO_IMAGE_MINIO_SECURE}
+      - MINIO_PREFIX=${VIDEO_IMAGE_MINIO_PREFIX}
+      - MINIO_PUBLIC_BASE_URL=${VIDEO_IMAGE_MINIO_PUBLIC_BASE_URL}
+
+      # faster-whisper 模型配置
+      - FASTER_WHISPER_MODEL=${VIDEO_IMAGE_FASTER_WHISPER_MODEL}
+      - FASTER_WHISPER_DEVICE=${VIDEO_IMAGE_FASTER_WHISPER_DEVICE}
+      - FASTER_WHISPER_COMPUTE_TYPE=${VIDEO_IMAGE_FASTER_WHISPER_COMPUTE_TYPE}
+      - DEFAULT_OUTPUT_FORMAT=${VIDEO_IMAGE_DEFAULT_OUTPUT_FORMAT}
+
+      # 代理配置（中国大陆访问 YouTube 时开启）
+      - PROXY_ENABLED=${VIDEO_IMAGE_PROXY_ENABLED}
+      - PROXY_URL=${VIDEO_IMAGE_PROXY_URL}
+      - PROXY_BYPASS=${VIDEO_IMAGE_PROXY_BYPASS}
+
+      # 临时目录
+      - TEMP_DIR=${VIDEO_IMAGE_TEMP_DIR}
+      - CLEAN_TMP_FILE=${VIDEO_IMAGE_CLEAN_TMP_FILE}
+      - FILE_STORAGE_STRATEGY=${VIDEO_IMAGE_FILE_STORAGE_STRATEGY}
+      - AUTH_ENABLED=${VIDEO_IMAGE_AUTH_ENABLED}
+      - AUTH_SHARED_SECRET=${VIDEO_IMAGE_AUTH_SHARED_SECRET}
+      - AUTH_TOLERANCE_SECONDS=${VIDEO_IMAGE_AUTH_TOLERANCE_SECONDS}
+
+      # 可执行路径（如有自定义安装路径）
+      - FFMPEG_BIN=${VIDEO_IMAGE_FFMPEG_BIN}
+      - YTDLP_BIN=${VIDEO_IMAGE_YTDLP_BIN}
+      # 请不要同时设置 YTDLP_COOKIES_FILE 与 YTDLP_COOKIES_FROM_BROWSER
+      # - YTDLP_COOKIES_FILE=${VIDEO_IMAGE_YTDLP_COOKIES_FILE}
+      - YTDLP_COOKIES_FROM_BROWSER=${VIDEO_IMAGE_YTDLP_COOKIES_FROM_BROWSER}
+
+      # OpenAI 备用配置（若需要调用 whisper-1）
+      - OPENAI_API_KEY=${VIDEO_IMAGE_OPENAI_API_KEY}
+      - OPENAI_BASE_URL=${VIDEO_IMAGE_OPENAI_BASE_URL}
+
+      # YouTube 细粒度配置
+      - YOUTUBE_PLAYER_CLIENT=${VIDEO_IMAGE_YOUTUBE_PLAYER_CLIENT}
+      - YOUTUBE_PO_TOKEN=${VIDEO_IMAGE_YOUTUBE_PO_TOKEN}
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-        reservations:
-          memory: 1G
     networks:
       - app-network
 
