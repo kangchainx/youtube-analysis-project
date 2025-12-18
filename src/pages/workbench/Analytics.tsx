@@ -51,6 +51,8 @@ import {
 } from "@/components/ui/empty";
 import {
   ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
@@ -71,6 +73,15 @@ const WINDOW_OPTIONS = {
 } as const;
 
 type WindowKey = keyof typeof WINDOW_OPTIONS;
+
+const MAX_TREND_CHANNELS = 5;
+const TREND_SERIES_KEYS = ["ch1", "ch2", "ch3", "ch4", "ch5"] as const;
+
+type TrendSeriesKey = (typeof TREND_SERIES_KEYS)[number];
+
+type TrendChartDatum = {
+  date: string;
+} & Partial<Record<TrendSeriesKey, number | null>>;
 
 type SubscriptionCardChannel = {
   id: string;
@@ -230,20 +241,32 @@ function formatShortDate(value: string | number | null | undefined): string {
   });
 }
 
+function formatAxisCompactNumber(value: number): string {
+  if (!Number.isFinite(value)) return "-";
+
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+
+  if (abs >= 1e4) {
+    const formatted = (abs / 1e4).toFixed(abs >= 1e5 ? 0 : 1);
+    return `${sign}${formatted.replace(/\.0$/, "")}w`;
+  }
+
+  if (abs >= 1e3) {
+    const formatted = (abs / 1e3).toFixed(abs >= 1e4 ? 0 : 1);
+    return `${sign}${formatted.replace(/\.0$/, "")}k`;
+  }
+
+  return `${value}`;
+}
+
 function parseTrendValue(value: string | null | undefined): number | null {
   if (value === null || value === undefined) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function computeTrendDomain(points: TrendPoint[]): [number, number] | null {
-  const values = points
-    .map((point) => point.value)
-    .filter(
-      (value): value is number =>
-        typeof value === "number" && Number.isFinite(value)
-    );
-
+function computeNumericDomain(values: number[]): [number, number] | null {
   if (!values.length) return null;
 
   let min = Math.min(...values);
@@ -274,8 +297,42 @@ function computeTrendDomain(points: TrendPoint[]): [number, number] | null {
   return [lower, upper];
 }
 
+function computeTrendDomainFromSeries(
+  data: TrendChartDatum[],
+  keys: TrendSeriesKey[]
+): [number, number] | null {
+  if (!data.length || !keys.length) return null;
+
+  const values: number[] = [];
+  data.forEach((row) => {
+    keys.forEach((key) => {
+      const value = row[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        values.push(value);
+      }
+    });
+  });
+
+  return computeNumericDomain(values);
+}
+
+function getTrendErrorMessage(caught: unknown): string {
+  if (caught instanceof ApiError) {
+    if (caught.status === 403) {
+      return "需要先订阅该频道后再查看趋势数据。";
+    }
+    if (caught.status === 401) {
+      return "登录已过期，请重新登录。";
+    }
+    return caught.message || "获取趋势数据失败，请稍后重试。";
+  }
+
+  if (caught instanceof Error) return caught.message;
+  return "获取趋势数据失败，请稍后重试。";
+}
+
 function AnalyticsPage() {
-  const [windowKey, setWindowKey] = useState<WindowKey>("30d");
+  const [windowKey, setWindowKey] = useState<WindowKey>("7d");
   const windowDays = WINDOW_OPTIONS[windowKey].days;
   const [isWindowPickerOpen, setIsWindowPickerOpen] = useState(false);
 
@@ -298,27 +355,73 @@ function AnalyticsPage() {
   );
   const subscriptionsReqId = useRef(0);
 
-  const [selectedChannelId, setSelectedChannelId] = useState<string | null>(
-    null
-  );
+  const [selectedChannelIds, setSelectedChannelIds] = useState<string[]>([]);
   const [isChannelPickerOpen, setIsChannelPickerOpen] = useState(false);
 
   const [trendMetric, setTrendMetric] = useState<TrendMetricKey>("viewCount");
-  const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([]);
+  const [trendData, setTrendData] = useState<TrendChartDatum[]>([]);
   const [trendRange, setTrendRange] = useState<{
     startDate: string;
     endDate: string;
   } | null>(null);
   const [isTrendLoading, setIsTrendLoading] = useState(false);
   const [trendError, setTrendError] = useState<string | null>(null);
+  const [trendWarning, setTrendWarning] = useState<string | null>(null);
   const trendReqId = useRef(0);
 
-  const selectedChannel = useMemo(
-    () =>
-      subscriptions.find((item) => item.channelId === selectedChannelId) ??
-      null,
-    [selectedChannelId, subscriptions]
-  );
+  const selectedChannels = useMemo(() => {
+    if (!selectedChannelIds.length) return [];
+    const byId = new Map(subscriptions.map((item) => [item.channelId, item]));
+    return selectedChannelIds
+      .map((channelId) => byId.get(channelId))
+      .filter(Boolean) as SubscriptionOption[];
+  }, [selectedChannelIds, subscriptions]);
+
+  const trendSeries = useMemo(() => {
+    const colors = [
+      "var(--chart-1)",
+      "var(--chart-2)",
+      "var(--chart-3)",
+      "var(--chart-4)",
+      "var(--chart-5)",
+    ];
+
+    return selectedChannelIds
+      .slice(0, MAX_TREND_CHANNELS)
+      .map((channelId, index) => {
+        const subscription = subscriptions.find(
+          (item) => item.channelId === channelId
+        );
+        const key = TREND_SERIES_KEYS[index] ?? TREND_SERIES_KEYS[0];
+        return {
+          key,
+          channelId,
+          title: subscription?.title ?? channelId,
+          customUrl: subscription?.customUrl ?? null,
+          color: colors[index % colors.length],
+        };
+      });
+  }, [selectedChannelIds, subscriptions]);
+
+  const trendSubtitle = useMemo(() => {
+    if (!selectedChannelIds.length) return "选择订阅频道查看趋势数据";
+    const metricDescription = TREND_METRIC_OPTIONS[trendMetric].description;
+
+    if (selectedChannelIds.length === 1) {
+      const title = selectedChannels[0]?.title ?? "已选择 1 个频道";
+      return `${title} · ${metricDescription}`;
+    }
+
+    return `已选择 ${selectedChannelIds.length} 个频道 · ${metricDescription}`;
+  }, [selectedChannelIds, selectedChannels, trendMetric]);
+
+  const channelPickerLabel = useMemo(() => {
+    if (!selectedChannelIds.length) return "选择订阅频道";
+    if (selectedChannelIds.length === 1) {
+      return selectedChannels[0]?.title ?? "已选择 1 个频道";
+    }
+    return `已选择 ${selectedChannelIds.length} 个频道`;
+  }, [selectedChannelIds, selectedChannels]);
 
   const loadSubscriptions = useCallback(async () => {
     const requestId = (subscriptionsReqId.current += 1);
@@ -459,85 +562,157 @@ function AnalyticsPage() {
   }, [windowDays]);
 
   const loadTrend = useCallback(async () => {
-    if (!selectedChannelId) return;
-
     const requestId = (trendReqId.current += 1);
-    setIsTrendLoading(true);
     setTrendError(null);
+    setTrendWarning(null);
+
+    const channelIds = selectedChannelIds.slice(0, MAX_TREND_CHANNELS);
+    if (!channelIds.length) {
+      setIsTrendLoading(false);
+      setTrendData([]);
+      setTrendRange(null);
+      return;
+    }
+
+    setIsTrendLoading(true);
+
+    const seriesPairs = channelIds.map((channelId, index) => ({
+      channelId,
+      key: TREND_SERIES_KEYS[index] ?? TREND_SERIES_KEYS[0],
+    }));
 
     try {
-      const response = await apiFetch<{
-        data?: {
-          channelId?: string;
-          metric?: string;
-          windowDays?: number;
-          startDate?: string;
-          endDate?: string;
-          points?: Array<{ date?: string; value?: string | null }>;
-        };
-      }>(
-        `/api/youtube/channels/${encodeURIComponent(
-          selectedChannelId
-        )}/statistics/daily?metric=${trendMetric}&days=${windowDays}`
+      const settled = await Promise.allSettled(
+        seriesPairs.map(async ({ channelId, key }) => {
+          const response = await apiFetch<{
+            data?: {
+              channelId?: string;
+              metric?: string;
+              windowDays?: number;
+              startDate?: string;
+              endDate?: string;
+              points?: Array<{ date?: string; value?: string | null }>;
+            };
+          }>(
+            `/api/youtube/channels/${encodeURIComponent(
+              channelId
+            )}/statistics/daily?metric=${trendMetric}&days=${windowDays}`
+          );
+
+          const points = Array.isArray(response?.data?.points)
+            ? response.data!.points
+            : [];
+
+          const normalized = points
+            .map<TrendPoint | null>((point) => {
+              const date = point.date?.trim();
+              if (!date) return null;
+              return {
+                date,
+                value: parseTrendValue(point.value ?? null),
+              };
+            })
+            .filter(Boolean) as TrendPoint[];
+
+          const valueByDate = new Map<string, number | null>();
+          normalized.forEach((point) => {
+            valueByDate.set(point.date, point.value);
+          });
+
+          return {
+            key,
+            channelId,
+            startDate: response?.data?.startDate ?? null,
+            endDate: response?.data?.endDate ?? null,
+            valueByDate,
+          };
+        })
       );
 
       if (trendReqId.current !== requestId) return;
 
-      const points = Array.isArray(response?.data?.points)
-        ? response.data!.points
-        : [];
+      const successes: Array<{
+        key: TrendSeriesKey;
+        channelId: string;
+        startDate: string | null;
+        endDate: string | null;
+        valueByDate: Map<string, number | null>;
+      }> = [];
+      const failures: Array<{ channelId: string; reason: unknown }> = [];
 
-      const normalized = points
-        .map<TrendPoint | null>((point) => {
-          const date = point.date?.trim();
-          if (!date) return null;
-          return {
-            date,
-            value: parseTrendValue(point.value ?? null),
-          };
-        })
-        .filter(Boolean) as TrendPoint[];
+      settled.forEach((result, index) => {
+        const pair = seriesPairs[index];
+        if (result.status === "fulfilled") {
+          successes.push(result.value);
+        } else {
+          failures.push({ channelId: pair.channelId, reason: result.reason });
+        }
+      });
 
-      normalized.sort((a, b) => {
-        const aTime = new Date(a.date).getTime();
-        const bTime = new Date(b.date).getTime();
+      if (!successes.length) {
+        const message = getTrendErrorMessage(failures[0]?.reason);
+        setTrendError(message);
+        setTrendData([]);
+        setTrendRange(null);
+        return;
+      }
+
+      const dates = new Set<string>();
+      successes.forEach((entry) => {
+        entry.valueByDate.forEach((_value, date) => dates.add(date));
+      });
+
+      const sortedDates = Array.from(dates).sort((a, b) => {
+        const aTime = new Date(a).getTime();
+        const bTime = new Date(b).getTime();
         return aTime - bTime;
       });
 
-      setTrendPoints(normalized);
-      if (response?.data?.startDate && response?.data?.endDate) {
+      const valuesByKey = new Map<TrendSeriesKey, Map<string, number | null>>();
+      successes.forEach((entry) => {
+        valuesByKey.set(entry.key, entry.valueByDate);
+      });
+
+      const merged: TrendChartDatum[] = sortedDates.map((date) => {
+        const row: TrendChartDatum = { date };
+        seriesPairs.forEach(({ key }) => {
+          row[key] = valuesByKey.get(key)?.get(date) ?? null;
+        });
+        return row;
+      });
+
+      setTrendData(merged);
+
+      const rangeSource = successes.find(
+        (entry) => Boolean(entry.startDate) && Boolean(entry.endDate)
+      );
+      if (rangeSource?.startDate && rangeSource.endDate) {
         setTrendRange({
-          startDate: response.data.startDate,
-          endDate: response.data.endDate,
+          startDate: rangeSource.startDate,
+          endDate: rangeSource.endDate,
         });
       } else {
         setTrendRange(null);
+      }
+
+      if (failures.length) {
+        setTrendWarning(
+          `部分频道趋势加载失败（${failures.length}/${seriesPairs.length}），已展示可用数据。`
+        );
       }
     } catch (caught) {
       console.error("Failed to load trend points", caught);
       if (trendReqId.current !== requestId) return;
 
-      if (caught instanceof ApiError) {
-        setTrendError(
-          caught.status === 403
-            ? "需要先订阅该频道后再查看趋势数据。"
-            : caught.status === 401
-              ? "登录已过期，请重新登录。"
-              : caught.message || "获取趋势数据失败，请稍后重试。"
-        );
-      } else if (caught instanceof Error) {
-        setTrendError(caught.message);
-      } else {
-        setTrendError("获取趋势数据失败，请稍后重试。");
-      }
-      setTrendPoints([]);
+      setTrendError(getTrendErrorMessage(caught));
+      setTrendData([]);
       setTrendRange(null);
     } finally {
       if (trendReqId.current === requestId) {
         setIsTrendLoading(false);
       }
     }
-  }, [selectedChannelId, trendMetric, windowDays]);
+  }, [selectedChannelIds, trendMetric, windowDays]);
 
   useEffect(() => {
     void loadSubscriptions();
@@ -550,30 +725,28 @@ function AnalyticsPage() {
 
   useEffect(() => {
     if (!subscriptions.length) {
-      setSelectedChannelId(null);
+      setSelectedChannelIds([]);
       return;
     }
 
-    setSelectedChannelId((previous) => {
-      if (
-        previous &&
-        subscriptions.some((item) => item.channelId === previous)
-      ) {
-        return previous;
+    setSelectedChannelIds((previous) => {
+      const valid = previous.filter((channelId) =>
+        subscriptions.some((item) => item.channelId === channelId)
+      );
+
+      if (valid.length) {
+        return valid.slice(0, MAX_TREND_CHANNELS);
       }
-      return subscriptions[0].channelId;
+
+      return subscriptions
+        .slice(0, MAX_TREND_CHANNELS)
+        .map((item) => item.channelId);
     });
   }, [subscriptions]);
 
   useEffect(() => {
-    if (!selectedChannelId) {
-      setTrendPoints([]);
-      setTrendRange(null);
-      setTrendError(null);
-      return;
-    }
     void loadTrend();
-  }, [loadTrend, selectedChannelId]);
+  }, [loadTrend]);
 
   const handleRefreshAll = () => {
     void loadSubscriptions();
@@ -583,27 +756,21 @@ function AnalyticsPage() {
   };
 
   const trendChartConfig = useMemo<ChartConfig>(() => {
-    return {
-      value: {
-        label: TREND_METRIC_OPTIONS[trendMetric].label,
-        color: TREND_METRIC_OPTIONS[trendMetric].color,
-      },
-    };
-  }, [trendMetric]);
-
-  const trendChartData = useMemo(
-    () =>
-      trendPoints.map((point) => ({
-        date: point.date,
-        value: point.value,
-      })),
-    [trendPoints]
-  );
+    const config: ChartConfig = {};
+    trendSeries.forEach((series) => {
+      config[series.key] = {
+        label: series.title,
+        color: series.color,
+      };
+    });
+    return config;
+  }, [trendSeries]);
 
   const trendYAxisDomain = useMemo<[number | "auto", number | "auto"]>(() => {
-    const computed = computeTrendDomain(trendPoints);
+    const keys = trendSeries.map((series) => series.key);
+    const computed = computeTrendDomainFromSeries(trendData, keys);
     return computed ?? ["auto", "auto"];
-  }, [trendPoints]);
+  }, [trendData, trendSeries]);
 
   const keywordCloud = useMemo(() => {
     const list = keywords?.keywords ?? [];
@@ -756,10 +923,10 @@ function AnalyticsPage() {
       );
     }
 
-    if (!selectedChannelId) {
+    if (!selectedChannelIds.length) {
       return (
         <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
-          请选择一个订阅频道查看趋势。
+          请选择最多 {MAX_TREND_CHANNELS} 个订阅频道查看趋势。
         </div>
       );
     }
@@ -775,7 +942,12 @@ function AnalyticsPage() {
       );
     }
 
-    const hasValue = trendChartData.some((point) => point.value !== null);
+    const hasValue = trendData.some((row) =>
+      trendSeries.some(({ key }) => {
+        const value = row[key];
+        return typeof value === "number" && Number.isFinite(value);
+      })
+    );
     if (!hasValue) {
       return (
         <div className="relative min-h-[240px]">
@@ -794,62 +966,74 @@ function AnalyticsPage() {
     }
 
     return (
-      <div className="relative">
-        {isTrendLoading ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 bg-background/60 text-muted-foreground backdrop-blur-sm">
-            <Spinner className="h-5 w-5" />
-            <span className="text-sm">加载中...</span>
+      <div className="space-y-3">
+        {trendWarning ? (
+          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+            {trendWarning}
           </div>
         ) : null}
 
-        <ChartContainer
-          config={trendChartConfig}
-          className="aspect-auto h-[320px] w-full"
-        >
-          <LineChart data={trendChartData} margin={{ left: 12, right: 12 }}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" />
-            <XAxis
-              dataKey="date"
-              tickLine={false}
-              axisLine={false}
-              tickMargin={10}
-              minTickGap={24}
-              tickFormatter={(value) => formatShortDate(value)}
-            />
-            <YAxis
-              tickLine={false}
-              axisLine={false}
-              tickMargin={8}
-              width={80}
-              domain={trendYAxisDomain}
-              allowDecimals={false}
-              tickFormatter={(value: number) => value.toLocaleString()}
-            />
-            <ChartTooltip
-              cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
-              content={
-                <ChartTooltipContent
-                  indicator="line"
-                  valueFormatter={(value) =>
-                    typeof value === "number" ? value.toLocaleString() : "-"
-                  }
-                  labelFormatter={(label) => formatShortDate(label)}
+        <div className="relative">
+          {isTrendLoading ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center gap-3 bg-background/60 text-muted-foreground backdrop-blur-sm">
+              <Spinner className="h-5 w-5" />
+              <span className="text-sm">加载中...</span>
+            </div>
+          ) : null}
+
+          <ChartContainer
+            config={trendChartConfig}
+            className="aspect-auto h-[320px] w-full"
+          >
+            <LineChart data={trendData} margin={{ left: 12, right: 12 }}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis
+                dataKey="date"
+                tickLine={false}
+                axisLine={false}
+                tickMargin={10}
+                minTickGap={24}
+                tickFormatter={(value) => formatShortDate(value)}
+              />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                width={64}
+                domain={trendYAxisDomain}
+                allowDecimals={false}
+                tickFormatter={(value: number) => formatAxisCompactNumber(value)}
+              />
+              <ChartTooltip
+                cursor={{ stroke: "var(--border)", strokeWidth: 1 }}
+                content={
+                  <ChartTooltipContent
+                    indicator="line"
+                    valueFormatter={(value) =>
+                      typeof value === "number" ? value.toLocaleString() : "-"
+                    }
+                    labelFormatter={(label) => formatShortDate(label)}
+                  />
+                }
+              />
+              {trendSeries.map((series) => (
+                <Line
+                  key={series.channelId}
+                  type="monotone"
+                  dataKey={series.key}
+                  stroke={`var(--color-${series.key})`}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                  isAnimationActive
+                  animationDuration={400}
+                  animationEasing="ease-in-out"
                 />
-              }
-            />
-            <Line
-              type="monotone"
-              dataKey="value"
-              stroke="var(--color-value)"
-              strokeWidth={2.25}
-              dot={false}
-              connectNulls
-              isAnimationActive
-              animationDuration={400}
-              animationEasing="ease-in-out"
-            />
-          </LineChart>
-        </ChartContainer>
+              ))}
+              <ChartLegend content={<ChartLegendContent />} />
+            </LineChart>
+          </ChartContainer>
+        </div>
       </div>
     );
   };
@@ -1035,9 +1219,7 @@ function AnalyticsPage() {
           <div className="space-y-1">
             <CardTitle>趋势折线图</CardTitle>
             <CardDescription>
-              {selectedChannel?.title
-                ? `${selectedChannel.title} · ${TREND_METRIC_OPTIONS[trendMetric].description}`
-                : "选择订阅频道查看趋势数据"}
+              {trendSubtitle}
               {trendRange?.startDate && trendRange?.endDate
                 ? `（${trendRange.startDate} ~ ${trendRange.endDate}）`
                 : `（近 ${windowDays} 天）`}
@@ -1060,7 +1242,7 @@ function AnalyticsPage() {
                   disabled={isSubscriptionsLoading || !subscriptions.length}
                 >
                   <span className="truncate">
-                    {selectedChannel?.title ?? "选择订阅频道"}
+                    {channelPickerLabel}
                   </span>
                   <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
                 </Button>
@@ -1070,32 +1252,50 @@ function AnalyticsPage() {
                   <CommandInput placeholder="搜索频道" />
                   <CommandEmpty>未找到频道</CommandEmpty>
                   <CommandGroup>
-                    {subscriptions.map((item) => (
-                      <CommandItem
-                        key={item.channelId}
-                        value={`${item.title} ${item.channelId} ${item.customUrl ?? ""}`}
-                        onSelect={() => {
-                          setSelectedChannelId(item.channelId);
-                          setIsChannelPickerOpen(false);
-                        }}
-                        className="cursor-pointer"
-                      >
-                        <Check
-                          className={cn(
-                            "mr-2 h-4 w-4",
-                            selectedChannelId === item.channelId
-                              ? "opacity-100"
-                              : "opacity-0"
-                          )}
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {item.title}
-                        </span>
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          {formatHandle(item.customUrl) ?? ""}
-                        </span>
-                      </CommandItem>
-                    ))}
+                    {subscriptions.map((item) => {
+                      const isSelected = selectedChannelIds.includes(
+                        item.channelId
+                      );
+                      const isAtLimit =
+                        !isSelected &&
+                        selectedChannelIds.length >= MAX_TREND_CHANNELS;
+
+                      return (
+                        <CommandItem
+                          key={item.channelId}
+                          value={`${item.title} ${item.channelId} ${item.customUrl ?? ""}`}
+                          onSelect={() => {
+                            setSelectedChannelIds((previous) => {
+                              const has = previous.includes(item.channelId);
+                              if (has) {
+                                return previous.filter(
+                                  (value) => value !== item.channelId
+                                );
+                              }
+                              if (previous.length >= MAX_TREND_CHANNELS) {
+                                return previous;
+                              }
+                              return [...previous, item.channelId];
+                            });
+                          }}
+                          disabled={isAtLimit}
+                          className="cursor-pointer"
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              isSelected ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          <span className="min-w-0 flex-1 truncate">
+                            {item.title}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {formatHandle(item.customUrl) ?? ""}
+                          </span>
+                        </CommandItem>
+                      );
+                    })}
                   </CommandGroup>
                 </Command>
               </PopoverContent>
@@ -1116,7 +1316,7 @@ function AnalyticsPage() {
                         : "text-muted-foreground"
                     )}
                     onClick={() => setTrendMetric(key)}
-                    disabled={!selectedChannelId}
+                    disabled={!selectedChannelIds.length}
                   >
                     {TREND_METRIC_OPTIONS[key].label}
                   </Button>
