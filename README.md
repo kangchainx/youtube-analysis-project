@@ -1,94 +1,153 @@
-# YouTube Analysis 前端
+<div align="center">
 
-现代化的 YouTube 频道分析与转写面板。支持频道数据洞察、视频转文字任务、实时通知、深色/浅色主题与可观测性工具集成。配套后端仓库：<https://github.com/kangchainx/youtube-analysis-backend>
+[![youtube-analysis-project](https://socialify.git.ci/kangchainx/youtube-analysis-project/image?custom_language=React&description=1&font=Inter&language=1&name=1&owner=1&theme=Light)](https://github.com/kangchainx/youtube-analysis-project)
 
-> 如果这个项目对你有帮助，请点亮一个 Star 🌟，你的支持是我持续维护的动力。
+<!-- Badges -->
+<p>
+  <a href="./LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License MIT">
+  </a>
+  <a href="https://github.com/kangchainx/youtube-analysis-project/stargazers">
+    <img src="https://img.shields.io/github/stars/kangchainx/youtube-analysis-project.svg" alt="GitHub stars">
+  </a>
+  <a href="https://github.com/kangchainx/youtube-analysis-project/network/members">
+    <img src="https://img.shields.io/github/forks/kangchainx/youtube-analysis-project.svg" alt="GitHub forks">
+  </a>
+  <a href="https://github.com/kangchainx/youtube-analysis-project/issues">
+    <img src="https://img.shields.io/github/issues/kangchainx/youtube-analysis-project.svg" alt="GitHub issues">
+  </a>
+</p>
 
-## 主要特性
+<!-- Language Switcher -->
+<p>
+  <strong>English</strong> | <a href="./README_zh.md">中文</a>
+</p>
 
-- **频道搜索与洞察**：按频道名称或 @handle 搜索，展示订阅数、观看数、视频数等关键指标，支持表格/卡片双视图与分页。
-- **转写任务中心**：调用 `/api/video-translate/*` 创建与跟踪视频转写任务，SSE 实时进度流，完成后可获取下载链接（Markdown/TXT 优先）。
-- **通知流**：SSE 推送任务/系统通知，未读数实时更新，可批量/单条标记已读。
-- **服务健康面板**：仪表盘内展示转写服务状态，支持一键刷新，暗黑模式适配。
-- **响应式与可访问性**：基于 Radix UI + Tailwind，提供骨架屏、空状态、无障碍交互；完整深浅色主题。
-- **一键部署**：提供 Dockerfile 与 docker-compose，支持前后端联动部署与本地反向代理。
+</div>
 
-## 快速开始
+---
 
-### 环境准备
+## 📊 YouTube Analysis Platform
 
-- Node.js 18+（推荐 LTS）
-- 配套后端：<https://github.com/kangchainx/youtube-analysis-backend>（默认 API 基址 `http://localhost:5001`）
-- 可选：在项目根目录创建 `.env.local`/`.env`，示例：
+A modern YouTube channel analytics and video transcription dashboard. Built with React 19 + TypeScript + Vite, featuring real-time SSE updates, channel analytics, video transcription tasks, and notifications.
+
+**Backend Repository**: [youtube-analysis-backend](https://github.com/kangchainx/youtube-analysis-backend)
+
+> If this project helps you, please give it a Star 🌟 - your support motivates continuous development!
+
+## ✨ Key Features
+
+- **📈 Channel Search & Insights**: Search channels by name or @handle, view key metrics (subscribers, views, videos), with table/card dual views and pagination
+- **🎬 Transcription Task Center**: Create and track video transcription tasks via `/api/video-translate/*`, real-time SSE progress streaming, download results in Markdown/TXT format
+- **🔔 Notification Stream**: SSE-powered task/system notifications, real-time unread count updates, batch/individual mark-as-read
+- **🏥 Service Health Dashboard**: Monitor transcription service status with one-click refresh, dark mode optimized
+- **♿ Responsive & Accessible**: Built with Radix UI + Tailwind CSS, skeleton screens, empty states, full dark/light theme support
+- **🚀 One-Click Deployment**: Dockerfile and docker-compose for seamless full-stack deployment with local reverse proxy
+
+## 🎬 Demo
+
+<div align="center">
+  <img src="./public/demo/youtube-analysis-project.gif" alt="YouTube Analysis Demo" width="100%" />
+</div>
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Node.js 18+ (LTS recommended)
+- Backend service: [youtube-analysis-backend](https://github.com/kangchainx/youtube-analysis-backend) (default API base: `http://localhost:5001`)
+- Optional: Create `.env.local` or `.env` in project root:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:5001    # 如需自定义后端地址
-# 仅当后端未提供 /api/config/youtube-api-key 时，才使用本地 Key 兜底
-VITE_YOUTUBE_API_KEY=你的_YT_API_Key
+VITE_API_BASE_URL=http://localhost:5001    # Custom backend URL
+# Only used as fallback if backend doesn't provide /api/config/youtube-api-key
+VITE_YOUTUBE_API_KEY=your_youtube_api_key
 ```
 
-### 本地开发
+### Local Development
 
 ```bash
 npm install
 npm run dev
-# 浏览器访问 http://localhost:5173
+# Open browser at http://localhost:5173
 ```
 
-常用脚本：
-- `npm run lint`：代码质量检查
-- `npm run build`：构建产物
-- `npm run preview`：本地预览生产构建
+**Available Scripts**:
+- `npm run lint` - Code quality check
+- `npm run build` - Production build
+- `npm run preview` - Preview production build locally
 
-### Docker
+### Docker Deployment
 
-仅前端（需自备后端或 API 代理）：
+**Frontend Only** (requires separate backend):
 
 ```bash
 docker build -t youtube-analysis-frontend:latest .
 docker run -d -p 8080:80 --name youtube-frontend youtube-analysis-frontend:latest
 ```
 
-前后端一键（建议）：在后端仓库构建后端镜像后，使用当前仓库的 `docker-compose.yml`：
+**Full Stack** (recommended - after building backend image):
 
 ```bash
 BACKEND_IMAGE=youtube-analysis-backend:latest docker-compose up --build
-# 后台运行：加 -d
+# Add -d flag for background mode
 ```
 
-## 功能截图
+## 📸 Screenshots
 
-![](./public/screenshot/login_page.png)
-![](./public/screenshot/home_page.png)
-![](./public/screenshot/search_result_table_page.png)
-![](./public/screenshot/search_result_card_page.png)
-![](./public/screenshot/search_result_detail_page.png)
-![](./public/screenshot/profile_page.png)
+<details>
+<summary>Click to view screenshots</summary>
 
-## 技术栈
+![Login Page](./public/screenshot/login_page.png)
+![Home Page](./public/screenshot/home_page.png)
+![Search Results - Table View](./public/screenshot/search_result_table_page.png)
+![Search Results - Card View](./public/screenshot/search_result_card_page.png)
+![Channel Details](./public/screenshot/search_result_detail_page.png)
+![User Profile](./public/screenshot/profile_page.png)
 
-- React 19 + TypeScript + Vite
-- Tailwind CSS 4、Radix UI、shadcn/ui 组件
-- SSE 事件源（转写任务进度、通知流）
-- Sonner Toast、Lucide 图标
+</details>
 
-## 路由与模块
+## 🛠️ Tech Stack
 
-- `/home`：频道搜索与列表
-- `/detail/:videoId`：视频详情与转写发起
-- `/workbench/dashboard`：指标概览 + 服务健康
-- `/workbench/tasks`：转写任务中心（SSE 实时更新、文件下载）
-- `/workbench/notifications`：通知中心（SSE 推送）
+- **Frontend Framework**: React 19.1.1 + TypeScript 5.6
+- **Build Tool**: Vite 7
+- **Routing**: React Router 7.9.4
+- **UI Components**: Radix UI + Tailwind CSS 4 + shadcn/ui
+- **Charts**: Recharts 3.4.1
+- **Real-time**: Server-Sent Events (SSE)
+- **Icons**: Lucide Icons
+- **Notifications**: Sonner Toast
 
-## 贡献指南
+## 🗺️ Routing Structure
 
-欢迎 Issue / PR！提交前请确保：
+- `/login` - User login
+- `/register` - User registration
+- `/home` - Channel search and discovery
+- `/detail/:videoId` - Video details and transcription creation
+- `/profile` - User profile settings
+- `/workbench/dashboard` - Metrics overview + service health
+- `/workbench/subscriptions` - Channel subscription management
+- `/workbench/analytics` - Channel analytics and insights
+- `/workbench/tasks` - Transcription task center (SSE real-time updates)
+- `/workbench/notifications` - Notification center (SSE streaming)
+
+## 🤝 Contributing
+
+Contributions are welcome! Please ensure the following before submitting:
 
 ```bash
 npm run lint
 npm run build
 ```
 
-## 许可证
+## 📄 License
 
-MIT License，详见 [LICENSE](./LICENSE)。欢迎二次开发与商用，记得保留版权与链接。
+MIT License - see [LICENSE](./LICENSE) for details. Free for commercial use, attribution appreciated.
+
+---
+
+<div align="center">
+
+**Made with ❤️ by [kangchainx](https://github.com/kangchainx)**
+
+</div>
