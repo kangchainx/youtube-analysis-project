@@ -1,6 +1,5 @@
 <div align="center">
 
-[![youtube-analysis-project](https://socialify.git.ci/kangchainx/youtube-analysis-project/image?custom_language=React&description=1&font=Inter&language=1&name=1&owner=1&theme=Light)](https://github.com/kangchainx/youtube-analysis-project)
 
 <!-- Badges -->
 <p>
@@ -20,7 +19,7 @@
 
 <!-- Language Switcher -->
 <p>
-  <strong>English</strong> | <a href="./README_zh.md">中文</a>
+  <strong>English</strong> | <a href="./README_zh.md">here</a>
 </p>
 
 </div>
@@ -44,7 +43,6 @@ A modern YouTube channel analytics and video transcription dashboard. Built with
 - **♿ Responsive & Accessible**: Built with Radix UI + Tailwind CSS, skeleton screens, empty states, full dark/light theme support
 - **🚀 One-Click Deployment**: Dockerfile and docker-compose for seamless full-stack deployment with local reverse proxy
 
-## 🎬 Demo
 
 <div align="center">
   <img src="./public/demo/youtube-analysis-project.gif" alt="YouTube Analysis Demo" width="100%" />
