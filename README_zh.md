@@ -33,6 +33,8 @@
 
 **配套后端仓库**：[youtube-analysis-backend](https://github.com/kangchainx/youtube-analysis-backend)
 
+**AI 视频翻译服务**：[video-transcriber](https://github.com/kangchainx/video-transcriber)
+
 > 如果这个项目对你有帮助，请点亮一个 Star 🌟，你的支持是我持续维护的动力！
 
 ## ✨ 主要特性

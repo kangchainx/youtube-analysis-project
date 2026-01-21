@@ -33,6 +33,8 @@ A modern YouTube channel analytics and video transcription dashboard. Built with
 
 **Backend Repository**: [youtube-analysis-backend](https://github.com/kangchainx/youtube-analysis-backend)
 
+**AI Video Translation Service**: [video-transcriber](https://github.com/kangchainx/video-transcriber)
+
 > If this project helps you, please give it a Star 🌟 - your support motivates continuous development!
 
 ## ✨ Key Features
