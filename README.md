@@ -52,7 +52,7 @@ A modern YouTube channel analytics and video transcription dashboard. Built with
   <img src="./public/demo/youtube-analysis-project.gif" alt="YouTube Analysis Demo" width="100%" />
 </div>
 
-## 🚀 Quick Start
+## 🚀 Quick Start 
 
 ### Prerequisites
 
